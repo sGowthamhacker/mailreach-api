@@ -7,17 +7,11 @@ from config import (
 
 hour_sent = 0
 
-def send_email(to_addr, subject, body):
-    global hour_sent
+def send_via_brevo(to_addr, subject, body):
     try:
         if not BREVO_API_KEY:
             print("  [brevo] API key missing!")
-            return {"to": to_addr, "status": "failed", "service": "none"}
-
-        if hour_sent >= MAX_PER_HOUR:
-            print("  [limit] Hour limit reached, waiting 60s")
-            time.sleep(60)
-            hour_sent = 0
+            return False
 
         res = requests.post(
             "https://api.brevo.com/v3/smtp/email",
@@ -35,16 +29,31 @@ def send_email(to_addr, subject, body):
         )
 
         if res.status_code == 201:
-            hour_sent += 1
             print(f"  [brevo] Sent to {to_addr}")
-            return {"to": to_addr, "status": "sent", "service": "brevo"}
+            return True
         else:
             print(f"  [brevo] Failed: {res.text}")
-            return {"to": to_addr, "status": "failed", "service": "none"}
+            return False
 
     except Exception as e:
         print(f"  [brevo] Error: {e}")
-        return {"to": to_addr, "status": "failed", "service": "none"}
+        return False
+
+def send_email(to_addr, subject, body):
+    global hour_sent
+
+    if hour_sent >= MAX_PER_HOUR:
+        print("  [limit] Hour limit reached, waiting 60s")
+        time.sleep(60)
+        hour_sent = 0
+
+    success = send_via_brevo(to_addr, subject, body)
+    if success:
+        hour_sent += 1
+        return {"to": to_addr, "status": "sent", "service": "brevo"}
+
+    print(f"  [error] Failed for {to_addr}")
+    return {"to": to_addr, "status": "failed", "service": "none"}
 
 def send_all(targets, subject, body):
     results = []
