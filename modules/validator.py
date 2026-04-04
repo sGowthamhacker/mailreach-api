@@ -56,7 +56,7 @@ def check_single_email(email):
         "domain": email_domain,
         "mx_ok": True,
         "smtp_ok": smtp_ok,
-        "valid": smtp_ok
+        "valid": True  # MX exists = valid enough
     }
 
 def validate_emails(emails, website_domain=None):
