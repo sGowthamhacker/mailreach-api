@@ -25,8 +25,12 @@ def build_email(from_addr, to_addr, subject, body):
 def send_via_gmail(to_addr, subject, body):
     global gmail_sent
     try:
+        if not GMAIL_USER or not GMAIL_APP_PASSWORD:
+            print(f"  [gmail] ❌ Credentials missing!")
+            print(f"  [gmail] USER: {GMAIL_USER}")
+            print(f"  [gmail] PASS: {'set' if GMAIL_APP_PASSWORD else 'NOT SET'}")
+            return False
         msg = build_email(GMAIL_USER, to_addr, subject, body)
-        # timeout=10 prevents hanging
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
             server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
             server.sendmail(GMAIL_USER, to_addr, msg.as_string())
