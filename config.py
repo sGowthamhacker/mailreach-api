@@ -1,23 +1,21 @@
 import os
 
-# === Gmail SMTP ===
 GMAIL_USER = os.environ.get("GMAIL_USER", "")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
 GMAIL_DAILY_LIMIT = 500
 
-# === Brevo SMTP ===
 BREVO_SMTP_SERVER = "smtp-relay.brevo.com"
 BREVO_PORT = 587
 BREVO_USER = os.environ.get("BREVO_USER", "")
 BREVO_SMTP_KEY = os.environ.get("BREVO_SMTP_KEY", "")
 BREVO_DAILY_LIMIT = 300
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "")
 
-# === Crawler ===
 MAX_PAGES_PER_DOMAIN = 20
 CRAWL_DELAY = 2
 REQUEST_TIMEOUT = 10
 
-# === Email Patterns ===
 # === Email Patterns ===
 EMAIL_PREFIXES = [
     # High priority
@@ -66,18 +64,9 @@ EMAIL_PREFIXES = [
     "abuse", "spam", "phishing", "trust",
     "community", "social", "newsletter",
     "events", "conference", "partnerships",
-
-    ## my
-    "security", "bugbounty", "bug-bounty", "vdp",
-    "disclosure", "psirt", "cert", "abuse",
-    "contact", "info", "hello", "support", "help",
-    "admin", "legal", "privacy", "trust", "compliance",
-    "team", "dev", "developer", "engineering",
-    "sales", "marketing", "press", "media",
 ]
 
 
-# === Priority ===
 PRIORITY = [
     "security", "bugbounty", "bug-bounty", "vdp",
     "disclosure", "psirt", "cert", "abuse",
@@ -87,9 +76,7 @@ PRIORITY = [
     "sales", "marketing", "press", "media"
 ]
 
-# === Blacklist ===
 BLACKLIST = ["noreply", "no-reply", "automated", "donotreply", "bounce"]
 
-# === Sender ===
 DELAY_BETWEEN_EMAILS = 5
 MAX_PER_HOUR = 20
