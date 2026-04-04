@@ -1,0 +1,12 @@
+Subject: Security Disclosure — {domain}
+
+Hello {company} Team,
+
+I am a security researcher and I discovered a potential vulnerability on {domain}.
+
+I would like to responsibly disclose this finding to your security team.
+
+Could you please direct me to the appropriate contact or confirm this is the right email?
+
+Thank you,
+[Your Name]
