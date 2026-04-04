@@ -81,3 +81,4 @@ BLACKLIST = ["noreply", "no-reply", "automated", "donotreply", "bounce"]
 MAX_PAGES_PER_DOMAIN = 60   # was 20
 CRAWL_DELAY = 1             # was 2
 REQUEST_TIMEOUT = 15        # was 10
+DELAY_BETWEEN_EMAILS = 2
