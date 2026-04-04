@@ -1,9 +1,13 @@
+import os
 import requests
 import time
 from config import (
     BREVO_API_KEY, SENDER_EMAIL,
     DELAY_BETWEEN_EMAILS, MAX_PER_HOUR
 )
+
+print(f"[debug] BREVO_API_KEY: {'SET' if BREVO_API_KEY else 'NOT SET'}")
+print(f"[debug] SENDER_EMAIL: {SENDER_EMAIL}")
 
 hour_sent = 0
 
