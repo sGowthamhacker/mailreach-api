@@ -116,3 +116,14 @@ async def send(req: SendRequest):
             "results": [],
             "logs": [{"msg": str(e), "type": "err"}]
         }
+    
+
+@app.get("/debug")
+def debug():
+    import os
+    return {
+        "GMAIL_USER": os.environ.get("GMAIL_USER", "NOT SET"),
+        "GMAIL_PASS": "SET" if os.environ.get("GMAIL_APP_PASSWORD") else "NOT SET",
+        "BREVO_USER": os.environ.get("BREVO_USER", "NOT SET"),
+        "BREVO_KEY": "SET" if os.environ.get("BREVO_SMTP_KEY") else "NOT SET"
+    }
