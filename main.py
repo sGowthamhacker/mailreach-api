@@ -231,7 +231,20 @@ async def check_mx(req: MxCheckRequest):
         "mx_hosts": [str(m.exchange).rstrip(".") for m in mx_hosts[:3]]
     }
 
-@app.get("/debug")
+@app.get("/debug-page")
+async def debug_page():
+    from modules.crawler import fetch_with_playwright
+    content = fetch_with_playwright("https://gowthamprofile.vercel.app/")
+    if not content:
+        return {"error": "Playwright returned nothing"}
+    gmail_found = "gmail" in content.lower()
+    gowtham_found = "gowtham" in content.lower()
+    return {
+        "page_length": len(content),
+        "gmail_found": gmail_found,
+        "gowtham_found": gowtham_found,
+        "snippet": content[:500]
+    }
 def debug():
     import os
     return {
