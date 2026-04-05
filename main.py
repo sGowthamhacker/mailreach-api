@@ -123,7 +123,7 @@ def scan_stream(req: ScanRequest):
             send(f"📧 Found {len(emails)} raw emails", "info")
 
             clean = clean_emails(emails)
-            filtered = filter_by_domain(clean, domain)
+            filtered = clean
             send(f"🧹 Cleaned to {len(filtered)} emails", "info")
 
             valid = validate_emails(filtered, domain)
