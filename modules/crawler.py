@@ -227,23 +227,21 @@ SEED_PATHS = [
 
 def fetch_with_playwright(url):
     try:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu"
-                ]
-            )
-            page = browser.new_page()
-            page.goto(url, timeout=15000, wait_until="networkidle")
-            page.wait_for_timeout(2000)
-            content = page.content()
-            browser.close()
-            return content
+        import asyncio
+        from playwright.async_api import async_playwright
+        async def _fetch():
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True, args=["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage","--disable-gpu"])
+                page = await browser.new_page()
+                await page.goto(url, timeout=15000, wait_until="networkidle")
+                await page.wait_for_timeout(2000)
+                content = await page.content()
+                await browser.close()
+                return content
+        return asyncio.run(_fetch())
+    except Exception as e:
+        print(f"[playwright] error: {e}")
+        return None
     except:
         return None
 
@@ -459,3 +457,4 @@ def crawl(domain, log_callback=None):
 
     print(f"  [done] {len(pages_data)} pages crawled")
     return pages_data
+
