@@ -38,6 +38,15 @@ def is_fake_email(email):
 
 def extract_emails_from_text(text):
     found = re.findall(EMAIL_REGEX, text)
+    
+    if not found:
+        pattern1 = r'([a-zA-Z0-9._-]+)\s*(?:@|gmail)'
+        obf_found = re.findall(pattern1, text, re.IGNORECASE)
+        if obf_found:
+            for name in obf_found:
+                if len(name) > 2 and '@' not in name:
+                    found.append(f"{name}@gmail.com")
+    
     clean = []
     for e in found:
         e = e.strip(".,;:\"'><)(][}{")
