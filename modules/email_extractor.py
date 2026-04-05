@@ -746,6 +746,10 @@ def fetch_extra_sources(domain):
     return list(emails)
 
 def guess_emails(domain):
+    HOSTING_PLATFORMS = ["vercel.app", "netlify.app", "github.io", "herokuapp.com", "pages.dev", "web.app"]
+    for platform in HOSTING_PLATFORMS:
+        if domain.endswith(platform):
+            return []  # skip guessing for hosting platforms
     parts = domain.split(".")
     if len(parts) > 2:
         root = ".".join(parts[-2:])
