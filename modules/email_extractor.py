@@ -1,5 +1,6 @@
 import re
 import sys
+import json
 sys.stdout.reconfigure(encoding='utf-8')
 import requests
 from bs4 import BeautifulSoup
@@ -31,7 +32,6 @@ def is_fake_email(email):
         return True
     if prefix in FAKE_PREFIXES:
         return True
-    # Skip image/asset emails
     if any(ext in prefix for ext in [".png", ".jpg", ".svg", ".gif", ".webp"]):
         return True
     return False
@@ -51,51 +51,37 @@ def extract_from_html(content):
     try:
         found = extract_emails_from_text(content)
         emails.update(found)
-
         soup = BeautifulSoup(content, "html.parser")
-
-        # mailto links
         for tag in soup.find_all("a", href=True):
             href = tag["href"]
             if "mailto:" in href:
                 email = href.replace("mailto:", "").split("?")[0].strip()
                 if "@" in email and not is_fake_email(email):
                     emails.add(email.lower())
-
-        # data attributes
         for tag in soup.find_all(True):
             for attr, val in tag.attrs.items():
                 if isinstance(val, str) and "@" in val:
                     found = extract_emails_from_text(val)
                     emails.update(found)
-
-        # JSON-LD schema markup
         for tag in soup.find_all("script", type="application/ld+json"):
             try:
                 found = extract_emails_from_text(tag.string or "")
                 emails.update(found)
             except:
                 pass
-
-        # meta tags
         for tag in soup.find_all("meta"):
             content_val = tag.get("content", "")
             if "@" in content_val:
                 found = extract_emails_from_text(content_val)
                 emails.update(found)
-
-        # plaintext inside pre/code blocks
         for tag in soup.find_all(["pre", "code"]):
             found = extract_emails_from_text(tag.get_text())
             emails.update(found)
-
-        # Contact page specific — look for spans/divs with email text
         for tag in soup.find_all(["span", "p", "div", "li", "td"]):
             text = tag.get_text()
             if "@" in text and len(text) < 200:
                 found = extract_emails_from_text(text)
                 emails.update(found)
-
     except:
         pass
     return list(emails)
@@ -123,7 +109,6 @@ def extract_from_js_files(domain, html):
     emails = set()
     js_files = get_all_js_files(domain, html)
     print(f"  [js] found {len(js_files)} JS files to scan")
-
     for js_url in js_files:
         try:
             r = requests.get(js_url, headers=HEADERS, timeout=10)
@@ -136,33 +121,57 @@ def extract_from_js_files(domain, html):
             pass
     return list(emails)
 
-# ── PUBLIC SOURCE 1: crt.sh (SSL certificate transparency logs) ──
+def fetch_public_sources(domain, emails_set):
+    """Fetch emails from fully public sources"""
+    session = requests.Session()
+    session.headers.update(HEADERS)
+    base = domain.split(".")[0]
+
+    # 1. crt.sh — SSL certificate transparency logs
     try:
-        r = session.get(f"https://crt.sh/?q=%25.{domain}&output=json", timeout=10)
+        r = session.get(f"https://crt.sh/?q=%25.{domain}&output=json", timeout=12)
         if r.status_code == 200:
             data = r.json()
-            for entry in data[:100]:
+            for entry in data[:200]:
                 name = entry.get("name_value", "")
                 found = extract_emails_from_text(name)
-                emails.update(found)
-            print(f"  [crt.sh] checked SSL certs for {domain}")
+                emails_set.update(found)
+            print(f"  [crt.sh] checked {len(data)} SSL certs")
     except:
         pass
 
-    # ── PUBLIC SOURCE 2: Hunter.io free domain search ──
+    # 2. Wayback Machine CDX API
     try:
-        r = session.get(f"https://api.hunter.io/v2/domain-search?domain={domain}&limit=100", timeout=10)
+        r = session.get(
+            f"http://web.archive.org/cdx/search/cdx?url={domain}/*&output=json&limit=30&fl=original",
+            timeout=12
+        )
+        if r.status_code == 200:
+            data = r.json()
+            for row in data[1:]:
+                found = extract_emails_from_text(row[0])
+                emails_set.update(found)
+            print(f"  [wayback] checked {len(data)} archive URLs")
+    except:
+        pass
+
+    # 3. Hunter.io free domain search (no key needed for basic)
+    try:
+        r = session.get(
+            f"https://api.hunter.io/v2/domain-search?domain={domain}&limit=100",
+            timeout=10
+        )
         if r.status_code == 200:
             data = r.json()
             for e in data.get("data", {}).get("emails", []):
                 email = e.get("value", "")
                 if email and "@" in email:
-                    emails.add(email.lower())
-                    print(f"  [hunter] found {email}")
+                    emails_set.add(email.lower())
+                    print(f"  [hunter] {email}")
     except:
         pass
 
-    # ── PUBLIC SOURCE 3: GitHub code search ──
+    # 4. GitHub public search
     try:
         r = session.get(
             f"https://api.github.com/search/code?q={domain}+email&per_page=10",
@@ -172,45 +181,37 @@ def extract_from_js_files(domain, html):
         if r.status_code == 200:
             data = r.json()
             for item in data.get("items", []):
-                found = extract_emails_from_text(item.get("name", "") + item.get("path", ""))
-                emails.update(found)
-            print(f"  [github] checked public repos for {domain}")
+                found = extract_emails_from_text(
+                    item.get("name", "") + " " + item.get("path", "")
+                )
+                emails_set.update(found)
+            print(f"  [github] checked public repos")
     except:
         pass
 
-    # ── PUBLIC SOURCE 4: CommonCrawl index ──
+    # 5. CommonCrawl index
     try:
         r = session.get(
             f"http://index.commoncrawl.org/CC-MAIN-2024-10-index?url=*.{domain}&output=json&limit=20",
-            timeout=10
+            timeout=12
         )
         if r.status_code == 200:
             for line in r.text.strip().split("\n")[:20]:
                 try:
-                    import json as _json
-                    item = _json.loads(line)
+                    item = json.loads(line)
                     found = extract_emails_from_text(item.get("url", ""))
-                    emails.update(found)
+                    emails_set.update(found)
                 except:
                     pass
-            print(f"  [commoncrawl] checked index for {domain}")
+            print(f"  [commoncrawl] checked index")
     except:
         pass
 
-    # ── PUBLIC SOURCE 5: Archive.org Wayback CDX ──
-    try:
-        r = session.get(
-            f"http://web.archive.org/cdx/search/cdx?url={domain}/*&output=json&limit=20&fl=original",
-            timeout=10
-        )
-        if r.status_code == 200:
-            data = r.json()
-            for row in data[1:]:
-                found = extract_emails_from_text(row[0])
-                emails.update(found)
-            print(f"  [wayback] checked archive for {domain}")
-    except:
-        pass
+def fetch_extra_sources(domain):
+    """Fetch emails from standard web paths"""
+    emails = set()
+    session = requests.Session()
+    session.headers.update(HEADERS)
 
     extra_urls = [
         # Security & Disclosure
@@ -739,7 +740,6 @@ def extract_from_js_files(domain, html):
 
 def guess_emails(domain):
     parts = domain.split(".")
-    # Get root domain only
     if len(parts) > 2:
         root = ".".join(parts[-2:])
     else:
@@ -752,32 +752,30 @@ def extract_all(domain, pages_data):
     for page in pages_data:
         url = page["url"]
         content = page["content"]
-
-        # HTML extraction
         found = extract_from_html(content)
         if found:
             print(f"  [html] {len(found)} emails at {url}")
         all_emails.update(found)
-
-        # JS file extraction
         js_emails = extract_from_js_files(domain, content)
         if js_emails:
             print(f"  [js] {len(js_emails)} emails from JS at {url}")
         all_emails.update(js_emails)
 
-    # Extra sources: security.txt, humans.txt, robots.txt etc
+    # Extra web paths
     extra = fetch_extra_sources(domain)
     all_emails.update(extra)
 
-    # Pattern guessing — always run regardless of crawl results
+    # Public sources
+    fetch_public_sources(domain, all_emails)
+
+    # Pattern guessing — always run
     guessed = guess_emails(domain)
     if guessed:
         all_emails.update(guessed)
         print(f"  [guess] {len(guessed)} pattern emails added")
 
-    # If crawl got nothing, log it clearly
     if not pages_data:
-        print(f"  [warn] 0 pages crawled — domain may block crawlers, using guessed emails only")
+        print(f"  [warn] 0 pages crawled — using guessed + public sources only")
 
     print(f"  [total] {len(all_emails)} raw emails found")
     return list(all_emails)
