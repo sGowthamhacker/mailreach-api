@@ -56,7 +56,7 @@ async def scan(req: ScanRequest):
         emails = extract_all(domain, pages)
         logs.append({"msg": f"Found {len(emails)} raw emails", "type": "info"})
         clean = clean_emails(emails)
-        filtered = clean  # keep ALL emails found, not just domain-matched
+        filtered = clean
         logs.append({"msg": f"Cleaned to {len(filtered)} emails", "type": "ok"})
         valid = validate_emails(filtered, domain)
         logs.append({"msg": f"Validated {len(valid)} emails", "type": "ok"})
@@ -184,7 +184,7 @@ def scan_stream(req: ScanRequest):
     )
 
 @app.post("/send")
-async def send(req: SendRequest):
+async def send_emails(req: SendRequest):
     try:
         loop = asyncio.get_event_loop()
         results = await loop.run_in_executor(
@@ -208,21 +208,16 @@ async def send(req: SendRequest):
 @app.post("/check-mx")
 async def check_mx(req: MxCheckRequest):
     import dns.resolver
-
     email = req.email.strip().lower()
-
     if "@" not in email:
         return {"email": email, "mx_ok": False, "smtp_ok": False, "error": "Invalid email format"}
-
     domain = email.split("@")[1]
-
     try:
         mx_records = dns.resolver.resolve(domain, "MX", lifetime=5)
         mx_hosts = sorted(mx_records, key=lambda r: r.preference)
         mx_ok = len(mx_hosts) > 0
     except Exception as e:
         return {"email": email, "mx_ok": False, "smtp_ok": False, "error": f"MX lookup failed: {str(e)}"}
-
     return {
         "email": email,
         "mx_ok": mx_ok,
@@ -234,28 +229,22 @@ async def check_mx(req: MxCheckRequest):
 @app.get("/debug-page")
 async def debug_page():
     try:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
+        from playwright.async_api import async_playwright
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
                 headless=True,
                 args=["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage","--disable-gpu"]
             )
-            page = browser.new_page()
-            page.goto("https://gowthamprofile.vercel.app/", timeout=15000)
-            page.wait_for_timeout(2000)
-            content = page.content()
-            browser.close()
-            return {"length": len(content), "gmail": "gmail" in content.lower(), "snippet": content[:300]}
+            page = await browser.new_page()
+            await page.goto("https://gowthamprofile.vercel.app/", timeout=15000)
+            await page.wait_for_timeout(2000)
+            content = await page.content()
+            await browser.close()
+            return {"length": len(content), "gmail": "gmail" in content.lower(), "snippet": content[:500]}
     except Exception as e:
         return {"error": str(e)}
-    gmail_found = "gmail" in content.lower()
-    gowtham_found = "gowtham" in content.lower()
-    return {
-        "page_length": len(content),
-        "gmail_found": gmail_found,
-        "gowtham_found": gowtham_found,
-        "snippet": content[:500]
-    }
+
+@app.get("/debug")
 def debug():
     import os
     return {
