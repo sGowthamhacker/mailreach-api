@@ -233,8 +233,8 @@ def fetch_with_playwright(url):
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True, args=["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage","--disable-gpu"])
                 page = await browser.new_page()
-                await page.goto(url, timeout=15000, wait_until="networkidle")
-                await page.wait_for_timeout(2000)
+                await page.goto(url, timeout=10000, wait_until="domcontentloaded")
+                await page.wait_for_timeout(1000)
                 content = await page.content()
                 await browser.close()
                 return content
@@ -384,7 +384,7 @@ def crawl(domain, log_callback=None):
         visited.add(url)
 
         HOSTING_PLATFORMS = ["vercel.app", "netlify.app", "github.io", "pages.dev"]
-        use_playwright = any(p in domain for p in HOSTING_PLATFORMS)
+        use_playwright = any(p in domain for p in HOSTING_PLATFORMS) and url == f"https://{domain}/"
         if use_playwright:
             content = fetch_with_playwright(url)
             if content:
