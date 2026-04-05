@@ -379,13 +379,17 @@ def crawl(domain, log_callback=None):
 
         r = safe_get(url, session)
         if not r:
-            # fallback to Playwright for JS-rendered pages
-            content = fetch_with_playwright(url)
-            if not content:
+            # Only use Playwright for homepage
+            if len(pages_data) == 0:
+                content = fetch_with_playwright(url)
+                if not content:
+                    log(f"[skip] {url}")
+                    continue
+                log(f"[ok] {url}")
+                pages_data.append({"url": url, "content": content})
+            else:
                 log(f"[skip] {url}")
                 continue
-            log(f"[ok] {url}")
-            pages_data.append({"url": url, "content": content})
         else:
             log(f"[ok] {url}")
             pages_data.append({"url": url, "content": r.text})
