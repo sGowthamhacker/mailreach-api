@@ -331,7 +331,55 @@ def get_robots_paths(domain, session):
         pass
     return paths
 
-def crawl(domain):
+def crawl(domain, log_callback=None):
+    def log(msg):
+        print(msg)
+        if log_callback:
+            log_callback(msg)
+
+    session = get_session()
+    visited = set()
+
+    to_visit = [f"https://{domain}{path}" for path in SEED_PATHS]
+    sitemap_urls = get_sitemap_urls(domain, session)
+    to_visit.extend(sitemap_urls)
+    robots_paths = get_robots_paths(domain, session)
+    to_visit.extend(robots_paths)
+
+    seen = set()
+    deduped = []
+    for url in to_visit:
+        if url not in seen:
+            seen.add(url)
+            deduped.append(url)
+    to_visit = deduped
+
+    pages_data = []
+    log(f"[crawl] Starting {domain} — {len(to_visit)} URLs queued")
+
+    while to_visit and len(visited) < MAX_PAGES_PER_DOMAIN:
+        url = to_visit.pop(0)
+        if url in visited:
+            continue
+        visited.add(url)
+
+        r = safe_get(url, session)
+        if not r:
+            log(f"[skip] {url}")
+            continue
+
+        log(f"[ok] {url}")
+        pages_data.append({"url": url, "content": r.text})
+
+        new_links = get_links(url, r.text, domain)
+        for link in new_links:
+            if link not in visited and link not in to_visit:
+                to_visit.insert(0, link)
+
+        time.sleep(CRAWL_DELAY)
+
+    log(f"[done] {len(pages_data)} pages crawled")
+    return pages_data
     session = get_session()
     visited = set()
 

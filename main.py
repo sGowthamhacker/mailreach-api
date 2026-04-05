@@ -1,7 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import asyncio
+import json
+import queue
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from modules.crawler import crawl
 from modules.email_extractor import extract_all
@@ -80,6 +84,104 @@ async def scan(req: ScanRequest):
     except Exception as e:
         logs.append({"msg": f"Error: {str(e)}", "type": "err"})
         return {"emails": [], "bounty": None, "logs": logs}
+
+@app.post("/scan-stream")
+def scan_stream(req: ScanRequest):
+    domain = req.domain \
+        .replace("https://", "") \
+        .replace("http://", "") \
+        .replace("www.", "") \
+        .split("/")[0] \
+        .strip()
+
+    log_queue = queue.Queue()
+
+    def send(msg, level="info"):
+        log_queue.put({"type": "log", "msg": msg, "level": level})
+
+    def run_scan():
+        try:
+            send(f"🔍 Scanning {domain}...", "info")
+            send(f"🌐 Building URL queue...", "info")
+
+            def crawl_log(msg):
+                if "[ok]" in msg:
+                    send(f"✅ Crawled: {msg.replace('[ok]','').strip()}", "ok")
+                elif "[skip]" in msg:
+                    send(f"⏭ Skipped: {msg.replace('[skip]','').strip()}", "info")
+                elif "[done]" in msg:
+                    send(f"🏁 {msg.replace('[done]','').strip()}", "ok")
+                elif "[crawl]" in msg:
+                    send(f"🕷️ {msg.replace('[crawl]','').strip()}", "info")
+                else:
+                    send(msg, "info")
+
+            pages = crawl(domain, log_callback=crawl_log)
+            send(f"📄 Crawled {len(pages)} pages — extracting emails...", "info")
+
+            emails = extract_all(domain, pages)
+            send(f"📧 Found {len(emails)} raw emails", "info")
+
+            clean = clean_emails(emails)
+            filtered = filter_by_domain(clean, domain)
+            send(f"🧹 Cleaned to {len(filtered)} emails", "info")
+
+            valid = validate_emails(filtered, domain)
+            send(f"✔️ Validated {len(valid)} emails", "ok")
+
+            best = filter_best(valid)
+            send(f"⭐ Selected {len(best)} best emails", "ok")
+
+            bounty = detect_bounty(pages)
+            if bounty["has_program"]:
+                send(f"🎯 Bug bounty detected: {bounty['type']}", "ok")
+            else:
+                send(f"ℹ️ No bounty program found", "info")
+
+            result_emails = [
+                {
+                    "email": e["email"],
+                    "score": e["score"],
+                    "domain": e["domain"],
+                    "mx_ok": e["mx_ok"],
+                    "smtp_ok": e.get("smtp_ok", False)
+                }
+                for e in best
+            ]
+
+            log_queue.put({
+                "type": "done",
+                "emails": result_emails,
+                "bounty": bounty
+            })
+
+        except Exception as e:
+            send(f"❌ Error: {str(e)}", "err")
+            log_queue.put({"type": "done", "emails": [], "bounty": None})
+
+    thread = threading.Thread(target=run_scan, daemon=True)
+    thread.start()
+
+    def event_stream():
+        while True:
+            try:
+                item = log_queue.get(timeout=300)
+                yield f"data: {json.dumps(item)}\n\n"
+                if item.get("type") == "done":
+                    break
+            except queue.Empty:
+                yield f"data: {json.dumps({'type':'log','msg':'Timeout','level':'err'})}\n\n"
+                yield f"data: {json.dumps({'type':'done','emails':[],'bounty':None})}\n\n"
+                break
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 @app.post("/send")
 async def send(req: SendRequest):
