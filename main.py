@@ -227,14 +227,14 @@ async def check_mx(req: MxCheckRequest):
     }
 
 @app.get("/debug-page")
+@app.get("/debug-page")
 async def debug_page():
     try:
+        import subprocess
+        subprocess.run(["python", "-m", "playwright", "install", "chromium"], check=True)
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=True,
-                args=["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage","--disable-gpu"]
-            )
+            browser = await p.chromium.launch(headless=True, args=["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage","--disable-gpu"])
             page = await browser.new_page()
             await page.goto("https://gowthamprofile.vercel.app/", timeout=15000)
             await page.wait_for_timeout(2000)
@@ -244,7 +244,6 @@ async def debug_page():
     except Exception as e:
         return {"error": str(e)}
 
-@app.get("/debug")
 def debug():
     import os
     return {
