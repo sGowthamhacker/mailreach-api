@@ -725,16 +725,23 @@ def fetch_extra_sources(domain):
         f"https://www.{domain}/about-us",
     ]
 
-    for url in extra_urls:
+    import concurrent.futures
+
+    def fetch_one(url):
         try:
-            r = session.get(url, timeout=8, verify=False)
+            r = session.get(url, timeout=4, verify=False)
             if r.status_code == 200:
                 found = extract_emails_from_text(r.text)
                 if found:
                     print(f"  [extra] {len(found)} emails from {url}")
-                    emails.update(found)
+                    return found
         except:
             pass
+        return []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as ex:
+        for result in ex.map(fetch_one, extra_urls):
+            emails.update(result)
 
     return list(emails)
 
