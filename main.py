@@ -1,5 +1,5 @@
 import subprocess
-subprocess.run(["python", "-m", "playwright", "install", "chromium"], check=False)
+subprocess.run(["python", "-m", "playwright", "install", "chromium", "--with-deps"], check=False, env={**__import__("os").environ, "PLAYWRIGHT_BROWSERS_PATH": "/tmp/pw-browsers"})
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -228,23 +228,24 @@ async def check_mx(req: MxCheckRequest):
         "domain": domain,
         "mx_hosts": [str(m.exchange).rstrip(".") for m in mx_hosts[:3]]
     }
-
-@app.get("/debug-page")
 @app.get("/debug-page")
 async def debug_page():
     try:
-        import subprocess
-        subprocess.run(["python", "-m", "playwright", "install", "chromium"], check=True)
-        from playwright.async_api import async_playwright
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True, args=["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage","--disable-gpu"])
-            page = await browser.new_page()
-            await page.goto("https://gowthamprofile.vercel.app/", timeout=15000)
-            await page.wait_for_timeout(2000)
-            content = await page.content()
-            await browser.close()
-            return {"length": len(content), "gmail": "gmail" in content.lower(), "snippet": content[:500]}
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        driver = webdriver.Chrome(options=options)
+        driver.get("https://gowthamprofile.vercel.app/")
+        import time; time.sleep(3)
+        content = driver.page_source
+        driver.quit()
+        return {"length": len(content), "gmail": "gmail" in content.lower(), "snippet": content[:500]}
     except Exception as e:
+        return {"error": str(e)}
+
         return {"error": str(e)}
 
 def debug():
