@@ -9,23 +9,18 @@ def is_blacklisted(email):
     return any(b in prefix for b in BLACKLIST)
 
 def is_example_email(email):
-    # Remove known fake domains
     fake_domains = ["example.com", "example.org", "test.com", "fake.com"]
     domain = email.split("@")[1].lower()
     return domain in fake_domains
 
 def is_junk(email):
     prefix = email.split("@")[0].lower()
-    # Remove random hash strings
     if len(prefix) > 30:
         return True
-    # Remove hex/hash looking strings
     if re.match(r'^[a-f0-9]{10,}$', prefix):
         return True
-    # Remove encoded strings like u002B
     if "u002" in prefix:
         return True
-    # Remove strings with too many numbers
     if len(re.findall(r'\d', prefix)) > 5:
         return True
     return False
@@ -33,10 +28,8 @@ def is_junk(email):
 def clean_emails(emails):
     seen = set()
     clean = []
-
     for email in emails:
         email = email.lower().strip()
-
         if email in seen:
             continue
         if not is_valid_format(email):
@@ -47,23 +40,37 @@ def clean_emails(emails):
             continue
         if is_junk(email):
             continue
-
         seen.add(email)
         clean.append(email)
-
     return clean
 
-def filter_by_domain(emails, domain):
-    result = []
-    root = domain.replace('www.', '')
-    parts = root.split('.')
+def get_root_domain(domain):
+    # Remove www
+    domain = domain.replace("www.", "")
+    parts = domain.split(".")
+    # Handle subdomains — get last 2 parts
     if len(parts) > 2:
-        root = '.'.join(parts[-2:])
-    
+        return ".".join(parts[-2:])
+    return domain
+
+def filter_by_domain(emails, domain):
+    root = get_root_domain(domain)
+    result = []
     for email in emails:
         email_domain = email.split("@")[1].lower()
-        if email_domain == root or email_domain.endswith("." + root):
+        email_root = get_root_domain(email_domain)
+        # Keep if root domains match
+        if email_root == root:
             result.append(email)
-        elif any(host in domain for host in ["vercel.app", "netlify.app", "github.io"]):
+            continue
+        # Keep if email domain ends with root (subdomains)
+        if email_domain.endswith("." + root):
             result.append(email)
+            continue
+        # Keep hosted platforms
+        if any(host in domain for host in ["vercel.app", "netlify.app", "github.io", "herokuapp.com"]):
+            result.append(email)
+            continue
+
+    print(f"  [filter] {len(result)}/{len(emails)} emails match domain {root}")
     return result
