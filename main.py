@@ -233,10 +233,21 @@ async def check_mx(req: MxCheckRequest):
 
 @app.get("/debug-page")
 async def debug_page():
-    from modules.crawler import fetch_with_playwright
-    content = fetch_with_playwright("https://gowthamprofile.vercel.app/")
-    if not content:
-        return {"error": "Playwright returned nothing"}
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage","--disable-gpu"]
+            )
+            page = browser.new_page()
+            page.goto("https://gowthamprofile.vercel.app/", timeout=15000)
+            page.wait_for_timeout(2000)
+            content = page.content()
+            browser.close()
+            return {"length": len(content), "gmail": "gmail" in content.lower(), "snippet": content[:300]}
+    except Exception as e:
+        return {"error": str(e)}
     gmail_found = "gmail" in content.lower()
     gowtham_found = "gowtham" in content.lower()
     return {
