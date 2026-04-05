@@ -225,6 +225,20 @@ SEED_PATHS = [
     "/ambassador", "/ambassadors",
 ]
 
+def fetch_with_playwright(url):
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, timeout=15000, wait_until="networkidle")
+            page.wait_for_timeout(2000)
+            content = page.content()
+            browser.close()
+            return content
+    except:
+        return None
+
 def get_session():
     s = requests.Session()
     s.headers.update(random.choice(HEADERS_LIST))
@@ -365,11 +379,16 @@ def crawl(domain, log_callback=None):
 
         r = safe_get(url, session)
         if not r:
-            log(f"[skip] {url}")
-            continue
-
-        log(f"[ok] {url}")
-        pages_data.append({"url": url, "content": r.text})
+            # fallback to Playwright for JS-rendered pages
+            content = fetch_with_playwright(url)
+            if not content:
+                log(f"[skip] {url}")
+                continue
+            log(f"[ok] {url}")
+            pages_data.append({"url": url, "content": content})
+        else:
+            log(f"[ok] {url}")
+            pages_data.append({"url": url, "content": r.text})
 
         new_links = get_links(url, r.text, domain)
         for link in new_links:

@@ -6,3 +6,5 @@ dnspython
 pandas
 lxml
 tqdm
+playwright
+playwright
