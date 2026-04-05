@@ -768,8 +768,10 @@ def guess_emails(domain):
 
 def extract_all(domain, pages_data):
     all_emails = set()
+    print(f"[extract_all] Called with {len(pages_data)} pages")
 
     for page in pages_data:
+        print(f"[extract_all] Processing {page['url']}, content length: {len(page['content'])}")
         url = page["url"]
         content = page["content"]
         found = extract_from_html(content)
