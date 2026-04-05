@@ -56,7 +56,7 @@ async def scan(req: ScanRequest):
         emails = extract_all(domain, pages)
         logs.append({"msg": f"Found {len(emails)} raw emails", "type": "info"})
         clean = clean_emails(emails)
-        filtered = filter_by_domain(clean, domain)
+        filtered = clean  # keep ALL emails found, not just domain-matched
         logs.append({"msg": f"Cleaned to {len(filtered)} emails", "type": "ok"})
         valid = validate_emails(filtered, domain)
         logs.append({"msg": f"Validated {len(valid)} emails", "type": "ok"})
