@@ -377,22 +377,21 @@ def crawl(domain, log_callback=None):
             continue
         visited.add(url)
 
+        HOSTING_PLATFORMS = ["vercel.app", "netlify.app", "github.io", "pages.dev"]
+        use_playwright = any(p in domain for p in HOSTING_PLATFORMS)
+
         r = safe_get(url, session)
-        if not r:
-            # Only use Playwright for homepage
-            if len(pages_data) == 0:
-                content = fetch_with_playwright(url)
-                if not content:
-                    log(f"[skip] {url}")
-                    continue
+        if use_playwright and len(pages_data) == 0:
+            content = fetch_with_playwright(url)
+            if content:
                 log(f"[ok] {url}")
                 pages_data.append({"url": url, "content": content})
-            else:
-                log(f"[skip] {url}")
                 continue
-        else:
-            log(f"[ok] {url}")
-            pages_data.append({"url": url, "content": r.text})
+        if not r:
+            log(f"[skip] {url}")
+            continue
+        log(f"[ok] {url}")
+        pages_data.append({"url": url, "content": r.text})
 
         new_links = get_links(url, r.text, domain)
         for link in new_links:
