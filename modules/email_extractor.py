@@ -136,11 +136,81 @@ def extract_from_js_files(domain, html):
             pass
     return list(emails)
 
-def fetch_extra_sources(domain):
-    """Fetch non-HTML sources that often contain emails"""
-    emails = set()
-    session = requests.Session()
-    session.headers.update(HEADERS)
+# ── PUBLIC SOURCE 1: crt.sh (SSL certificate transparency logs) ──
+    try:
+        r = session.get(f"https://crt.sh/?q=%25.{domain}&output=json", timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            for entry in data[:100]:
+                name = entry.get("name_value", "")
+                found = extract_emails_from_text(name)
+                emails.update(found)
+            print(f"  [crt.sh] checked SSL certs for {domain}")
+    except:
+        pass
+
+    # ── PUBLIC SOURCE 2: Hunter.io free domain search ──
+    try:
+        r = session.get(f"https://api.hunter.io/v2/domain-search?domain={domain}&limit=100", timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            for e in data.get("data", {}).get("emails", []):
+                email = e.get("value", "")
+                if email and "@" in email:
+                    emails.add(email.lower())
+                    print(f"  [hunter] found {email}")
+    except:
+        pass
+
+    # ── PUBLIC SOURCE 3: GitHub code search ──
+    try:
+        r = session.get(
+            f"https://api.github.com/search/code?q={domain}+email&per_page=10",
+            headers={**HEADERS, "Accept": "application/vnd.github.v3+json"},
+            timeout=10
+        )
+        if r.status_code == 200:
+            data = r.json()
+            for item in data.get("items", []):
+                found = extract_emails_from_text(item.get("name", "") + item.get("path", ""))
+                emails.update(found)
+            print(f"  [github] checked public repos for {domain}")
+    except:
+        pass
+
+    # ── PUBLIC SOURCE 4: CommonCrawl index ──
+    try:
+        r = session.get(
+            f"http://index.commoncrawl.org/CC-MAIN-2024-10-index?url=*.{domain}&output=json&limit=20",
+            timeout=10
+        )
+        if r.status_code == 200:
+            for line in r.text.strip().split("\n")[:20]:
+                try:
+                    import json as _json
+                    item = _json.loads(line)
+                    found = extract_emails_from_text(item.get("url", ""))
+                    emails.update(found)
+                except:
+                    pass
+            print(f"  [commoncrawl] checked index for {domain}")
+    except:
+        pass
+
+    # ── PUBLIC SOURCE 5: Archive.org Wayback CDX ──
+    try:
+        r = session.get(
+            f"http://web.archive.org/cdx/search/cdx?url={domain}/*&output=json&limit=20&fl=original",
+            timeout=10
+        )
+        if r.status_code == 200:
+            data = r.json()
+            for row in data[1:]:
+                found = extract_emails_from_text(row[0])
+                emails.update(found)
+            print(f"  [wayback] checked archive for {domain}")
+    except:
+        pass
 
     extra_urls = [
         # Security & Disclosure
