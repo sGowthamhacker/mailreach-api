@@ -669,9 +669,6 @@ def fetch_extra_sources(domain):
 
 def guess_emails(domain):
     parts = domain.split(".")
-    # Skip hosting platforms
-    if any(host in domain for host in ["vercel.app", "netlify.app", "github.io", "herokuapp.com"]):
-        return []
     # Get root domain only
     if len(parts) > 2:
         root = ".".join(parts[-2:])
@@ -702,11 +699,15 @@ def extract_all(domain, pages_data):
     extra = fetch_extra_sources(domain)
     all_emails.update(extra)
 
-    # Pattern guessing
+    # Pattern guessing — always run regardless of crawl results
     guessed = guess_emails(domain)
     if guessed:
         all_emails.update(guessed)
         print(f"  [guess] {len(guessed)} pattern emails added")
+
+    # If crawl got nothing, log it clearly
+    if not pages_data:
+        print(f"  [warn] 0 pages crawled — domain may block crawlers, using guessed emails only")
 
     print(f"  [total] {len(all_emails)} raw emails found")
     return list(all_emails)
