@@ -227,6 +227,9 @@ SEED_PATHS = [
 
 def fetch_with_playwright(url):
     try:
+        import subprocess
+        subprocess.run(["python", "-m", "playwright", "install", "chromium"], 
+                      capture_output=True, timeout=120)
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
