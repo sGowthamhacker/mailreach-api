@@ -159,6 +159,19 @@ def debug_page():
             return {"status": "failed", "error": "Playwright returned None"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
+    
+
+@app.get("/test-playwright")
+def test_playwright():
+    try:
+        from modules.crawler import fetch_with_playwright
+        result = fetch_with_playwright("https://gowthamprofile.vercel.app/")
+        if result:
+            return {"status": "working", "content_length": len(result)}
+        else:
+            return {"status": "failed", "error": "No content returned"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 @app.get("/debug")
 def debug():
