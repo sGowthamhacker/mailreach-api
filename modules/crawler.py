@@ -226,18 +226,27 @@ SEED_PATHS = [
 ]
 
 def fetch_with_playwright(url):
+    print(f"[fetch_with_playwright] Starting for {url}")
     try:
         from playwright.sync_api import sync_playwright
+        print(f"[fetch_with_playwright] Importing sync_playwright...")
         with sync_playwright() as p:
+            print(f"[fetch_with_playwright] Launching chromium...")
             browser = p.chromium.launch(headless=True, args=["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage","--disable-gpu"])
+            print(f"[fetch_with_playwright] Creating page...")
             page = browser.new_page()
+            print(f"[fetch_with_playwright] Navigating to {url}...")
             page.goto(url, timeout=10000, wait_until="domcontentloaded")
+            print(f"[fetch_with_playwright] Page loaded, waiting 1s...")
             page.wait_for_timeout(1000)
+            print(f"[fetch_with_playwright] Getting content...")
             content = page.content()
+            print(f"[fetch_with_playwright] Content length: {len(content)}")
             browser.close()
+            print(f"[fetch_with_playwright] Success! Returning {len(content)} bytes")
             return content
     except Exception as e:
-        print(f"[playwright] error: {e}")
+        print(f"[fetch_with_playwright] ERROR: {str(e)}")
         return None
 
 def get_session():
