@@ -1,9 +1,8 @@
 from config import PRIORITY, BLACKLIST
 
 JUNK_PATTERNS = [
-    "bounce", "automated", "invoice", "noreply",
-    "no-reply", "donotreply", "mailer-daemon",
-    "postmaster", "daemon", "unsubscribe"
+    "bounce", "automated", "mailer-daemon",
+    "daemon", "unsubscribe", "donotreply"
 ]
 
 def is_junk_pattern(email):

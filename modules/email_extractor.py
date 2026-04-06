@@ -566,6 +566,121 @@ def fetch_public_sources(domain):
     """
     Find emails from public sources:
     1. crt.sh (SSL certificates)
+    2. Wayback Machine
+    3. WHOIS
+    4. 200+ common patterns
+    """
+    emails = set()
+
+    # 1. crt.sh SSL certificates
+    try:
+        r = requests.get(
+            f"https://crt.sh/?q=%40{domain}&output=json",
+            headers=HEADERS, timeout=10
+        )
+        if r.status_code == 200:
+            data = r.json()
+            for entry in data[:100]:
+                name = entry.get("name_value", "")
+                found = extract_emails_from_text(name, source="crt.sh")
+                emails.update(found)
+            print(f"[crt.sh] Found {len(emails)} emails")
+    except Exception as e:
+        print(f"[crt.sh] Error: {e}")
+
+    # 2. Wayback Machine
+    try:
+        r = requests.get(
+            f"https://web.archive.org/cdx/search/cdx?url={domain}/*&output=json&fl=original&limit=50",
+            headers=HEADERS, timeout=10
+        )
+        if r.status_code == 200:
+            urls = r.json()
+            for item in urls[1:20]:
+                try:
+                    page = requests.get(item[0], headers=HEADERS, timeout=5, verify=False)
+                    if page.status_code == 200:
+                        found = extract_emails_from_text(page.text, source="wayback")
+                        emails.update(found)
+                except:
+                    pass
+            print(f"[wayback] Total emails so far: {len(emails)}")
+    except Exception as e:
+        print(f"[wayback] Error: {e}")
+
+    # 3. WHOIS
+    try:
+        import whois
+        w = whois.whois(domain)
+        whois_text = str(w)
+        found = extract_emails_from_text(whois_text, source="whois")
+        emails.update(found)
+        print(f"[whois] Found {len(found)} emails")
+    except Exception as e:
+        print(f"[whois] Error: {e}")
+
+    # 4. 200+ common email patterns
+    COMMON_PREFIXES = [
+        "support", "info", "contact", "hello", "help",
+        "security", "legal", "privacy", "admin", "cs",
+        "helpdesk", "customerservice", "customer_service",
+        "mobile_support", "sales", "billing", "abuse",
+        "webmaster", "team", "noreply", "no-reply",
+        "press", "media", "pr", "marketing", "hr",
+        "jobs", "careers", "recruiting", "talent",
+        "finance", "accounting", "payments", "invoice",
+        "partners", "partnerships", "business", "corp",
+        "enterprise", "wholesale", "reseller",
+        "api", "developer", "developers", "dev",
+        "feedback", "suggestions", "ideas",
+        "community", "forum", "social",
+        "newsletter", "alerts", "notifications",
+        "compliance", "gdpr", "dpo", "data",
+        "trust", "safety", "fraud", "risk",
+        "operations", "ops", "engineering",
+        "it", "sysadmin", "network", "infra",
+        "ceo", "cto", "cfo", "coo", "founder",
+        "office", "headquarters", "hq",
+        "general", "enquiries", "enquiry",
+        "service", "services", "solutions",
+        "technical", "tech", "helpline",
+        "reception", "secretary", "assistant",
+        "booking", "reservations", "appointments",
+        "emergency", "urgent", "priority",
+        "report", "reports", "reporting",
+        "audit", "compliance", "legal",
+        "procurement", "purchasing", "supply",
+        "logistics", "shipping", "delivery",
+        "returns", "refunds", "warranty",
+        "training", "education", "learning",
+        "research", "analytics", "data",
+        "design", "creative", "brand",
+        "content", "editorial", "publishing",
+        "events", "conference", "webinar",
+        "sponsorship", "advertising", "ads",
+        "affiliate", "referral", "rewards",
+        "investor", "investors", "ir",
+        "board", "directors", "governance",
+        "charity", "foundation", "giving",
+        "volunteer", "internship", "intern",
+    ]
+
+    root_domain = domain
+    parts = domain.split(".")
+    if len(parts) > 2:
+        root_domain = ".".join(parts[-2:])
+
+    for prefix in COMMON_PREFIXES:
+        emails.add(f"{prefix}@{domain}")
+        if root_domain != domain:
+            emails.add(f"{prefix}@{root_domain}")
+
+    print(f"[patterns] Added {len(COMMON_PREFIXES)*2} pattern emails")
+    print(f"[public] Total from all sources: {len(emails)}")
+    return list(emails)
+    """
+    Find emails from public sources:
+    1. crt.sh (SSL certificates)
     2. Hunter.io pattern guessing
     3. Common email patterns for domain
     """
