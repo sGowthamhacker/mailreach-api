@@ -769,19 +769,39 @@ def guess_emails(domain):
 def extract_all(domain, pages_data):
     all_emails = set()
     print(f"[extract_all] Called with {len(pages_data)} pages")
-
-    for page in pages_data:
-        print(f"[extract_all] Processing {page['url']}, content length: {len(page['content'])}")
-        url = page["url"]
-        content = page["content"]
+    print(f"[extract_all] pages_data type: {type(pages_data)}")
+    
+    if not pages_data:
+        print(f"[extract_all] ERROR: pages_data is empty!")
+        return []
+    
+    for i, page in enumerate(pages_data):
+        print(f"[extract_all] Page {i}: {page}")
+        print(f"[extract_all] Page keys: {page.keys() if isinstance(page, dict) else 'NOT A DICT'}")
+        
+        url = page.get("url", "NO_URL")
+        content = page.get("content", None)
+        
+        print(f"[extract_all] URL: {url}")
+        print(f"[extract_all] Content type: {type(content)}, is None: {content is None}")
+        
+        if content:
+            print(f"[extract_all] Content length: {len(content)}")
+            print(f"[extract_all] First 300 chars: {content[:300]}")
+        
+        if not content:
+            print(f"[extract_all] SKIPPING - content is empty/None")
+            continue
+        
+        print(f"[extract_all] Calling extract_from_html...")
         found = extract_from_html(content)
-        if found:
-            print(f"  [html] {len(found)} emails at {url}")
+        print(f"[extract_all] extract_from_html returned {len(found)} emails: {found}")
+        
         all_emails.update(found)
+        
         js_emails = extract_from_js_files(domain, content)
-        if js_emails:
-            print(f"  [js] {len(js_emails)} emails from JS at {url}")
+        print(f"[extract_all] extract_from_js_files returned {len(js_emails)} emails")
         all_emails.update(js_emails)
 
-    print(f"  [total] {len(all_emails)} raw emails found")
+    print(f"  [FINAL] {len(all_emails)} total emails found: {list(all_emails)}")
     return list(all_emails)
