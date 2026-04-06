@@ -1,4 +1,4 @@
-import re
+﻿import re
 import sys
 import json
 import requests
@@ -205,7 +205,7 @@ def extract_from_js_files(domain, html):
 
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(fetch_and_scan, url): url for url in js_list}
-            for future in as_completed(futures, timeout=30):
+            for future in as_completed(futures, timeout=120):
                 try:
                     result = future.result()
                     all_emails.update(result)
@@ -377,7 +377,7 @@ def extract_all(domain, pages_data):
 
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(deep_process, page): page for page in deep_scan_pages}
-        for future in as_completed(futures, timeout=60):
+        for future in as_completed(futures, timeout=120):
             try:
                 all_emails.update(future.result())
             except Exception as e:
@@ -385,7 +385,7 @@ def extract_all(domain, pages_data):
 
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(quick_process, page): page for page in quick_scan_pages}
-        for future in as_completed(futures, timeout=30):
+        for future in as_completed(futures, timeout=120):
             try:
                 all_emails.update(future.result())
             except Exception as e:
@@ -395,3 +395,4 @@ def extract_all(domain, pages_data):
     real_emails = [e for e in sorted(all_emails) if not is_fake_email(e)]
     print(f"[FINAL] Total: {len(all_emails)} | Real: {len(real_emails)}")
     return real_emails
+
