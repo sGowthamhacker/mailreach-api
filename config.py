@@ -1,18 +1,8 @@
-import os
+﻿import os
 
-GMAIL_USER = os.environ.get("GMAIL_USER", "")
-GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
-GMAIL_DAILY_LIMIT = 500
-
-BREVO_SMTP_SERVER = "smtp-relay.brevo.com"
-BREVO_PORT = 587
-BREVO_USER = os.environ.get("BREVO_USER", "")
-BREVO_SMTP_KEY = os.environ.get("BREVO_SMTP_KEY", "")
-BREVO_DAILY_LIMIT = 300
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "")
-
-MAX_PAGES_PER_DOMAIN = 60
+MAX_PAGES_PER_DOMAIN = 100
 CRAWL_DELAY = 1
 REQUEST_TIMEOUT = 15
 DELAY_BETWEEN_EMAILS = 2
@@ -47,16 +37,57 @@ EMAIL_PREFIXES = [
     "hq", "webmaster", "postmaster", "hostmaster",
     "abuse", "spam", "phishing", "trust",
     "community", "social", "newsletter",
-    "events", "conference", "partnerships",
+    "events", "conference",
+    "ceo", "cto", "cfo", "coo", "ciso",
+    "founder", "cofounder", "president", "director",
+    "manager", "officer", "executive",
+    "cs", "customer", "onboarding", "success",
+    "returns", "refunds", "warranty", "shipping",
+    "logistics", "procurement", "purchasing",
+    "vendor", "suppliers", "wholesale", "reseller",
+    "affiliate", "referral", "rewards", "loyalty",
+    "design", "creative", "ux", "ui", "product",
+    "research", "analytics", "insights", "growth",
+    "content", "editorial", "publishing", "blog",
+    "seo", "ads", "advertising", "campaigns",
+    "training", "education", "learning", "academy",
+    "certification", "courses", "workshop",
+    "charity", "foundation", "csr", "sustainability",
+    "volunteer", "internship", "intern", "graduate",
+    "alumni", "ambassador", "advocate",
+    "safety", "fraud", "risk", "infosec",
+    "network", "infrastructure", "sysadmin", "it",
+    "cloud", "devops", "backend", "frontend",
+    "mobile", "app", "software", "hardware",
+    "sales-team", "salesteam", "presales", "postsales",
+    "enterprise", "smb", "startup", "agency",
+    "demo", "trial", "pilot", "poc",
+    "quote", "pricing", "proposal", "rfp",
+    "contract", "legal-team", "legalteam",
+    "secretary", "reception", "front-desk",
+    "booking", "reservations", "appointments",
+    "emergency", "urgent", "escalation",
+    "noreply", "no-reply", "donotreply",
+    "mailer", "notifications", "alerts",
+    "updates", "status", "system",
+    "hello-team", "hi", "hey",
+    "global", "international", "regional",
+    "apac", "emea", "latam", "us", "eu", "uk",
+    "india", "asia", "europe", "americas",
 ]
 
 PRIORITY = [
-    "security", "bugbounty", "bug-bounty", "vdp",
-    "disclosure", "psirt", "cert", "abuse",
+    "security", "bugbounty", "bug-bounty", "vdp", "bbp",
+    "disclosure", "psirt", "cert", "csirt", "abuse",
     "contact", "info", "hello", "support", "help",
     "admin", "legal", "privacy", "trust", "compliance",
     "team", "dev", "developer", "engineering",
-    "sales", "marketing", "press", "media"
+    "sales", "marketing", "press", "media",
+    "ceo", "cto", "cfo", "ciso", "founder",
+    "hr", "careers", "jobs", "hiring",
+    "billing", "finance", "payments",
+    "feedback", "enquiry", "inquiry",
+    "general", "office", "corporate",
 ]
 
-BLACKLIST = ["noreply", "no-reply", "automated", "donotreply", "bounce"]
+BLACKLIST = ["automated", "donotreply", "bounce", "mailer-daemon", "daemon"]

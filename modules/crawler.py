@@ -1,4 +1,4 @@
-import requests
+﻿import requests
 import random
 import time
 from bs4 import BeautifulSoup
@@ -399,7 +399,7 @@ def crawl(domain, log_callback=None):
                     else:
                         log(f"[skip] {url}")
 
-            if crawled >= 50:
+            if crawled >= 100:
                 break
 
     log(f"[CRAWLER] Done - {len(pages_data)} pages crawled")
