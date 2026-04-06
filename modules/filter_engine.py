@@ -1,4 +1,4 @@
-from config import PRIORITY, BLACKLIST
+﻿from config import PRIORITY, BLACKLIST
 
 JUNK_PATTERNS = [
     "bounce", "automated", "mailer-daemon",
@@ -21,7 +21,7 @@ def filter_best(valid_emails):
     for item in valid_emails:
         email = item["email"]
 
-        # Only need MX to be valid — smtp_ok is bonus
+        # Only need MX to be valid â€” smtp_ok is bonus
         if not item.get("mx_ok"):
             print(f"  [skip] {email} -> no MX")
             continue

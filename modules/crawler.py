@@ -102,6 +102,11 @@ COMMON_SUBDOMAINS = [
 ]
 
 SEED_PATHS = [
+    "/", "/contact", "/about", "/team", "/security",
+    "/support", "/help", "/docs", "/blog",
+    "/contact-us", "/about-us",
+    "/security.txt", "/.well-known/security.txt",
+    "/humans.txt", "/robots.txt",
     "/", "/contact", "/contact-us", "/contactus", "/contact_us",
     "/about", "/about-us", "/aboutus", "/about_us",
     "/team", "/our-team", "/ourteam", "/people", "/staff",
@@ -218,7 +223,7 @@ def discover_subdomains(domain, session):
             return None
 
     print(f"[SUBDOMAIN] Checking {len(COMMON_SUBDOMAINS)} subdomains for {root}...")
-    with ThreadPoolExecutor(max_workers=50) as executor:
+    with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(check_subdomain, sub): sub for sub in COMMON_SUBDOMAINS}
         for future in as_completed(futures, timeout=25):
             try:
@@ -251,7 +256,7 @@ def get_sitemap_urls(domain, session):
                     break
         except:
             pass
-    return list(urls)[:50]
+    return list(urls)[:20]
 
 def get_robots_paths(domain, session):
     paths = []
@@ -278,7 +283,7 @@ def crawl_batch(to_visit, domain, max_pages, log):
 
     while i < len(to_visit) and crawled < max_pages:
         batch = []
-        while len(batch) < 30 and i < len(to_visit):
+        while len(batch) < 5 and i < len(to_visit):
             url = to_visit[i]
             i += 1
             if url not in visited:
@@ -288,7 +293,7 @@ def crawl_batch(to_visit, domain, max_pages, log):
         if not batch:
             break
 
-        with ThreadPoolExecutor(max_workers=30) as executor:
+        with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(fetch_url_parallel, url): url for url in batch}
             for future in as_completed(futures, timeout=15):
                 try:
@@ -298,9 +303,11 @@ def crawl_batch(to_visit, domain, max_pages, log):
                         pages_data.append({"url": url, "content": content})
                         crawled += 1
                         new_links = get_links(url, content, domain)
-                        for link in new_links:
+                        # Sort by priority score so contact/support pages crawled first
+                        scored_new = sorted(new_links, key=score_link, reverse=True)
+                        for link in scored_new[:20]:  # max 20 new links per page
                             if link not in visited and link not in to_visit:
-                                to_visit.append(link)
+                                to_visit.insert(crawled + 1, link)  # insert at front
                     else:
                         log(f"[skip] {url}")
                 except:
@@ -362,9 +369,12 @@ def crawl(domain, log_callback=None, scan_subdomains=True):
                 seen_bases.add(b)
                 unique_bases.append(b)
 
-        for base in unique_bases:
-            for path in SEED_PATHS:
-                to_visit.append(f"{base}{path}")
+        # Only apply seed paths to main domain, not every subdomain
+        for path in SEED_PATHS:
+            to_visit.append(f"https://{domain}{path}")
+        # For subdomains just add root URL
+        for base in subdomains:
+            to_visit.append(base.rstrip("/") + "/")
 
         # Step 3: Sitemap + robots
         sitemap_urls = get_sitemap_urls(domain, session)
@@ -388,6 +398,10 @@ def crawl(domain, log_callback=None, scan_subdomains=True):
 
     log(f"[CRAWLER] Done - {len(pages_data)} pages crawled")
     return pages_data
+
+
+
+
 
 
 

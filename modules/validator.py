@@ -67,9 +67,9 @@ def validate_emails(emails, website_domain=None):
         return []
     print(f"\n[validator] Checking {len(emails)} emails with 20 workers...")
     results = []
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(check_single_email, email): email for email in emails}
-        for future in as_completed(futures, timeout=60):
+        for future in as_completed(futures, timeout=30):
             try:
                 results.append(future.result())
             except Exception as e:
@@ -83,3 +83,4 @@ def validate_emails(emails, website_domain=None):
     valid = [r for r in results if r["valid"]]
     print(f"  [done] {len(valid)}/{len(emails)} valid")
     return results
+
