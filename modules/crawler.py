@@ -6,6 +6,7 @@ from urllib.parse import urljoin, urlparse
 import urllib3
 urllib3.disable_warnings()
 from config import MAX_PAGES_PER_DOMAIN, CRAWL_DELAY, REQUEST_TIMEOUT
+from modules.email_extractor import extract_from_html, extract_from_js_files
 
 HEADERS_LIST = [
     {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"},
@@ -15,59 +16,41 @@ HEADERS_LIST = [
 ]
 
 PRIORITY_KEYWORDS = [
-    # Contact
     "contact", "contact-us", "contactus", "reach", "reach-us",
     "get-in-touch", "getintouch", "talk-to-us", "say-hello",
     "connect", "enquiry", "inquiry", "email-us", "mail-us",
     "message", "touch", "write-us", "write-to-us", "ping",
-
-    # About
     "about", "about-us", "aboutus", "our-story", "ourstory",
     "who-we-are", "whoweare", "mission", "vision", "overview",
     "introduction", "our-mission", "story",
-
-    # Team
     "team", "people", "staff", "crew", "founders", "leadership",
     "our-team", "meet-the-team", "executives", "management",
     "board", "directors", "advisors", "employees",
-
-    # Security
     "security", "disclosure", "responsible-disclosure",
     "responsibledisclosure", "vulnerability", "vulnerability-disclosure",
     "bounty", "bug-bounty", "bugbounty", "vdp", "bbp",
     "report", "cvd", "pentest", "hackerone", "bugcrowd",
     "intigriti", "yeswehack", "security-policy", "securitypolicy",
     "security-research", "report-vulnerability", "hall-of-fame",
-
-    # Support
     "support", "help", "faq", "helpdesk", "help-center",
     "helpcenter", "helpcentre", "assistance", "customer-service",
     "customerservice", "customer-support", "customersupport",
     "ticket", "tickets",
-
-    # Company
     "company", "corporate", "organization", "organisation",
     "business", "partners", "investors", "press", "media",
     "newsroom", "news", "blog", "updates", "announcements",
     "pr", "communications",
-
-    # Legal
     "legal", "privacy", "terms", "policy", "compliance",
     "gdpr", "cookies", "disclaimer", "tos", "terms-of-service",
     "terms-of-use", "privacy-policy",
-
-    # Jobs
     "careers", "jobs", "hiring", "work-with-us", "join-us",
     "join", "work", "opportunities", "openings", "vacancies",
     "positions", "recruitment",
-
-    # Technical
     "humans", "robots", "sitemap", "well-known",
     "security.txt", "pgp", "gpg", "keys",
 ]
 
 SEED_PATHS = [
-    # Core
     "/", "/contact", "/contact-us", "/contactus", "/contact_us",
     "/about", "/about-us", "/aboutus", "/about_us",
     "/team", "/our-team", "/ourteam", "/people", "/staff",
@@ -78,172 +61,18 @@ SEED_PATHS = [
     "/press", "/media", "/newsroom", "/news",
     "/legal", "/privacy", "/terms",
     "/careers", "/jobs", "/blog",
-
-    # Contact variants
-    "/reach", "/reach-us", "/reach_us", "/reachout",
-    "/get-in-touch", "/getintouch", "/get_in_touch",
-    "/talk-to-us", "/talktous", "/talk_to_us",
-    "/say-hello", "/sayhello", "/hello",
-    "/connect", "/connect-with-us", "/connectwithus",
-    "/enquiry", "/enquiries", "/inquiry", "/inquiries",
-    "/email", "/email-us", "/emailus", "/mail", "/mail-us",
-    "/message", "/messages", "/message-us",
-    "/write-to-us", "/write-us", "/writeus",
-    "/ping", "/drop-us-a-line", "/drop-a-line",
-    "/lets-talk", "/letstalk", "/lets_talk",
-    "/get-help", "/gethelp", "/ask",
-    "/feedback", "/feedbacks", "/suggestions",
-    "/report", "/reports", "/submit",
-    "/hire-us", "/hireus", "/hire_us",
-    "/work-with-us", "/workwithus", "/work_with_us",
-    "/partner-with-us", "/partnerwithus",
-
-    # About variants
-    "/our-story", "/ourstory", "/our_story",
-    "/who-we-are", "/whoweare", "/who_we_are",
-    "/mission", "/our-mission", "/ourmission",
-    "/vision", "/our-vision", "/ourvision",
-    "/values", "/our-values", "/ourvalues",
-    "/overview", "/introduction", "/intro",
-    "/history", "/background", "/profile",
-    "/manifesto", "/philosophy", "/culture",
-
-    # Team variants
-    "/meet-the-team", "/meettheteam", "/meet_the_team",
-    "/meet-us", "/meetus", "/our-people", "/ourpeople",
-    "/leadership", "/leaders", "/management",
-    "/founders", "/founder", "/co-founders", "/cofounders",
-    "/executives", "/executive-team", "/executiveteam",
-    "/board", "/board-of-directors", "/boardofdirectors",
-    "/advisors", "/advisory-board", "/advisoryboard",
-    "/directors", "/officers", "/c-suite", "/csuite",
-    "/employees", "/members", "/contributors",
-
-    # Security variants
-    "/security-policy", "/securitypolicy", "/security_policy",
-    "/security-research", "/securityresearch",
-    "/security-disclosure", "/securitydisclosure",
-    "/responsible-disclosure", "/responsibledisclosure",
-    "/responsible_disclosure", "/coordinated-disclosure",
-    "/vulnerability-disclosure", "/vulnerabilitydisclosure",
-    "/vulnerability_disclosure", "/vulnerability-reporting",
-    "/bug-bounty", "/bugbounty", "/bug_bounty",
-    "/bounty", "/bounty-program", "/bountyprogram",
-    "/vdp", "/bbp", "/cvd", "/pentest",
-    "/hackerone", "/bugcrowd", "/intigriti",
-    "/yeswehack", "/openbugbounty",
-    "/report-vulnerability", "/reportvulnerability",
-    "/report-a-bug", "/reportabug", "/report-bug",
-    "/hall-of-fame", "/halloffame", "/hof",
-    "/thanks", "/acknowledgements", "/acknowledgments",
-    "/security-advisories", "/advisories",
-    "/cve", "/cves", "/patches", "/patch-notes",
-    "/pgp", "/gpg", "/publickey", "/public-key",
-    "/keys", "/.well-known/pgp-key.txt",
-    "/.well-known/gpg-key.txt",
-
-    # Support variants
-    "/helpdesk", "/help-desk", "/help-center",
-    "/helpcenter", "/help_center", "/helpcentre",
-    "/customer-service", "/customerservice",
-    "/customer-support", "/customersupport",
-    "/customer-care", "/customercare",
-    "/tickets", "/open-ticket", "/new-ticket",
-    "/submit-ticket", "/support-ticket",
-    "/knowledge-base", "/knowledgebase", "/kb",
-    "/documentation", "/docs", "/wiki",
-    "/guides", "/tutorials", "/resources",
-    "/forum", "/forums", "/community",
-    "/chat", "/live-chat", "/livechat",
-
-    # Legal variants
-    "/terms-of-service", "/termsofservice", "/tos",
-    "/terms-of-use", "/termsofuse", "/tou",
-    "/privacy-policy", "/privacypolicy",
-    "/cookie-policy", "/cookiepolicy", "/cookies",
-    "/disclaimer", "/disclaimers",
-    "/compliance", "/gdpr", "/ccpa",
-    "/aup", "/acceptable-use", "/acceptableuse",
-    "/dmca", "/copyright", "/ip-policy",
-    "/data-protection", "/dataprotection",
-
-    # Jobs variants
-    "/hiring", "/we-are-hiring", "/wearehiring",
-    "/join", "/join-us", "/joinus", "/join_us",
-    "/join-our-team", "/joinourteam",
-    "/openings", "/open-positions", "/openpositions",
-    "/vacancies", "/vacancy", "/positions",
-    "/recruitment", "/recruit", "/apply",
-    "/internships", "/internship", "/intern",
-    "/graduate", "/graduate-program",
-
-    # Press variants
-    "/press-kit", "/presskit", "/press_kit",
-    "/press-releases", "/pressreleases",
-    "/press-room", "/pressroom",
-    "/media-kit", "/mediakit", "/media_kit",
-    "/media-contact", "/mediacontact",
-    "/journalists", "/editorial",
-    "/brand", "/brand-assets", "/brandassets",
-    "/logo", "/logos", "/assets",
-
-    # Company variants
-    "/investors", "/investor-relations", "/investorrelations",
-    "/partners", "/partnerships", "/partner",
-    "/affiliates", "/affiliate", "/resellers",
-    "/vendors", "/suppliers",
-    "/customers", "/clients", "/case-studies",
-    "/testimonials", "/reviews",
-
-    # Blog/News variants
-    "/blog/contact", "/blog/about",
-    "/updates", "/changelog", "/release-notes",
-    "/announcements", "/announcement",
-    "/events", "/event", "/webinars", "/webinar",
-    "/podcast", "/podcasts", "/videos",
-
-    # Developer
-    "/api", "/api/contact", "/developer",
-    "/developers", "/dev", "/open-source",
-    "/opensource", "/github", "/contributing",
-    "/contribute", "/contributors",
-
-    # Misc
-    "/sitemap", "/sitemap-index.xml",
-    "/site-map", "/page-sitemap.xml",
-    "/imprint", "/impressum",
-    "/accessibility", "/a11y",
-    "/trust", "/trust-center", "/trustcenter",
-    "/status", "/statuspage",
-    "/offices", "/office", "/locations", "/location",
-    "/headquarters", "/hq",
-    "/map", "/directions",
-    "/social", "/social-media",
-    "/newsletter", "/subscribe", "/unsubscribe",
-    "/opt-in", "/opt-out",
-    "/referral", "/referrals", "/refer",
-    "/ambassador", "/ambassadors",
 ]
 
 def fetch_with_playwright(url):
-    print(f"[fetch_with_playwright] Starting for {url}")
     try:
         from playwright.sync_api import sync_playwright
-        print(f"[fetch_with_playwright] Importing sync_playwright...")
         with sync_playwright() as p:
-            print(f"[fetch_with_playwright] Launching chromium...")
             browser = p.chromium.launch(headless=True, args=["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage","--disable-gpu"])
-            print(f"[fetch_with_playwright] Creating page...")
             page = browser.new_page()
-            print(f"[fetch_with_playwright] Navigating to {url}...")
             page.goto(url, timeout=10000, wait_until="domcontentloaded")
-            print(f"[fetch_with_playwright] Page loaded, waiting 1s...")
             page.wait_for_timeout(1000)
-            print(f"[fetch_with_playwright] Getting content...")
             content = page.content()
-            print(f"[fetch_with_playwright] Content length: {len(content)}")
             browser.close()
-            print(f"[fetch_with_playwright] Success! Returning {len(content)} bytes")
             return content
     except Exception as e:
         print(f"[fetch_with_playwright] ERROR: {str(e)}")
@@ -282,8 +111,6 @@ def get_links(base_url, html, domain):
     links = []
     try:
         soup = BeautifulSoup(html, "html.parser")
-
-        # Priority: nav + footer + header links
         priority_links = set()
         for tag in soup.find_all(['nav', 'footer', 'header']):
             for a in tag.find_all("a", href=True):
@@ -291,26 +118,20 @@ def get_links(base_url, html, domain):
                 parsed = urlparse(full)
                 if domain in parsed.netloc:
                     priority_links.add(f"{parsed.scheme}://{parsed.netloc}{parsed.path}")
-
-        # All links
         all_links = set()
         for tag in soup.find_all("a", href=True):
             full = urljoin(base_url, tag["href"])
             parsed = urlparse(full)
             if domain in parsed.netloc:
                 all_links.add(f"{parsed.scheme}://{parsed.netloc}{parsed.path}")
-
-        # Score and sort
         scored = []
         for link in all_links:
             score = score_link(link)
             if link in priority_links:
                 score += 10
             scored.append((score, link))
-
         scored.sort(reverse=True)
         links = [l for _, l in scored]
-
     except:
         pass
     return links
@@ -355,45 +176,7 @@ def get_robots_paths(domain, session):
         pass
     return paths
 
-def extract_all(domain, pages_data):
-    all_emails = set()
-    print(f"[extract_all] Called with {len(pages_data)} pages")
-    print(f"[extract_all] pages_data type: {type(pages_data)}")
-    
-    if not pages_data:
-        print(f"[extract_all] ERROR: pages_data is empty!")
-        return []
-    
-    for i, page in enumerate(pages_data):
-        print(f"[extract_all] Page {i}: {page}")
-        print(f"[extract_all] Page keys: {page.keys() if isinstance(page, dict) else 'NOT A DICT'}")
-        
-        url = page.get("url", "NO_URL")
-        content = page.get("content", None)
-        
-        print(f"[extract_all] URL: {url}")
-        print(f"[extract_all] Content type: {type(content)}, is None: {content is None}")
-        
-        if content:
-            print(f"[extract_all] Content length: {len(content)}")
-            print(f"[extract_all] First 300 chars: {content[:300]}")
-        
-        if not content:
-            print(f"[extract_all] SKIPPING - content is empty/None")
-            continue
-        
-        print(f"[extract_all] Calling extract_from_html...")
-        found = extract_from_html(content)
-        print(f"[extract_all] extract_from_html returned {len(found)} emails: {found}")
-        
-        all_emails.update(found)
-        
-        js_emails = extract_from_js_files(domain, content)
-        print(f"[extract_all] extract_from_js_files returned {len(js_emails)} emails")
-        all_emails.update(js_emails)
-
-    print(f"  [FINAL] {len(all_emails)} total emails found: {list(all_emails)}")
-    return list(all_emails)
+def crawl(domain, log_callback=None):
     def log(msg):
         print(msg)
         if log_callback:
@@ -419,97 +202,28 @@ def extract_all(domain, pages_data):
     pages_data = []
     log(f"[crawl] Starting {domain} — {len(to_visit)} URLs queued")
 
-    # Static file extensions to skip
     SKIP_EXTENSIONS = ['.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', 
                        '.ico', '.woff', '.woff2', '.ttf', '.eot', '.pdf', '.zip', '.tar', 
                        '.gz', '.mp4', '.mp3', '.wav', '.mov']
 
-    while to_visit and len(visited) < 50:  # Limit to 50 pages
+    while to_visit and len(visited) < 50:
         url = to_visit.pop(0)
         if url in visited:
             continue
         visited.add(url)
 
-        # Skip static files
         is_static = any(url.lower().endswith(ext) for ext in SKIP_EXTENSIONS)
         if is_static:
             log(f"[skip] {url} (static file)")
             continue
 
-        # Try Playwright for hosting platforms on homepage
         content = None
         HOSTING_PLATFORMS = ["vercel.app", "netlify.app", "github.io", "pages.dev"]
         is_hosting = any(p in domain for p in HOSTING_PLATFORMS)
         is_homepage = url.rstrip('/') == f"https://{domain}".rstrip('/')
         
         if is_hosting and is_homepage:
-            print(f"[CRAWL] Using Playwright for homepage: {url}")
             content = fetch_with_playwright(url)
-            print(f"[CRAWL] Playwright returned: {len(content) if content else 'None'} bytes")
-        
-        # If no Playwright content or not hosting platform, use regular HTTP
-        if not content:
-            r = safe_get(url, session)
-            if r:
-                content = r.text
-            else:
-                log(f"[skip] {url} (HTTP failed)")
-                continue
-        
-        log(f"[ok] {url}")
-        pages_data.append({"url": url, "content": content})
-
-        # Extract links only if we haven't hit the limit yet
-        if len(visited) < 50:
-            new_links = get_links(url, content, domain)
-            for link in new_links:
-                if link not in visited and link not in to_visit:
-                    to_visit.insert(0, link)
-
-        time.sleep(0.5)  # Reduced from CRAWL_DELAY for speed
-
-    log(f"[done] {len(pages_data)} pages crawled")
-    return pages_data
-    def log(msg):
-        print(msg)
-        if log_callback:
-            log_callback(msg)
-
-    session = get_session()
-    visited = set()
-
-    to_visit = [f"https://{domain}{path}" for path in SEED_PATHS]
-    sitemap_urls = get_sitemap_urls(domain, session)
-    to_visit.extend(sitemap_urls)
-    robots_paths = get_robots_paths(domain, session)
-    to_visit.extend(robots_paths)
-
-    seen = set()
-    deduped = []
-    for url in to_visit:
-        if url not in seen:
-            seen.add(url)
-            deduped.append(url)
-    to_visit = deduped
-
-    pages_data = []
-    log(f"[crawl] Starting {domain} — {len(to_visit)} URLs queued")
-
-    while to_visit and len(visited) < MAX_PAGES_PER_DOMAIN:
-        url = to_visit.pop(0)
-        if url in visited:
-            continue
-        visited.add(url)
-
-        content = None
-        HOSTING_PLATFORMS = ["vercel.app", "netlify.app", "github.io", "pages.dev"]
-        is_hosting = any(p in domain for p in HOSTING_PLATFORMS)
-        is_homepage = url.rstrip('/') == f"https://{domain}".rstrip('/')
-        
-        if is_hosting and is_homepage:
-            print(f"[DEBUG] Trying Playwright for {url}")
-            content = fetch_with_playwright(url)
-            print(f"[DEBUG] Playwright returned: {len(content) if content else 'None'} bytes")
         
         if not content:
             r = safe_get(url, session)
@@ -522,13 +236,13 @@ def extract_all(domain, pages_data):
         log(f"[ok] {url}")
         pages_data.append({"url": url, "content": content})
 
-        new_links = get_links(url, content, domain)
-        for link in new_links:
-            if link not in visited and link not in to_visit:
-                to_visit.insert(0, link)
+        if len(visited) < 50:
+            new_links = get_links(url, content, domain)
+            for link in new_links:
+                if link not in visited and link not in to_visit:
+                    to_visit.insert(0, link)
 
-        time.sleep(CRAWL_DELAY)
+        time.sleep(0.5)
 
     log(f"[done] {len(pages_data)} pages crawled")
     return pages_data
-
