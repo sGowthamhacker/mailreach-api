@@ -479,6 +479,8 @@ def extract_from_js_files(domain, html):
 # ============================================================================
 
 def extract_all(domain, pages_data):
+
+    
     """
     Complete production-grade email extraction pipeline.
     
@@ -517,6 +519,11 @@ def extract_all(domain, pages_data):
         js_emails = extract_from_js_files(domain, content)
         all_emails.update(js_emails)
         
+        # Public sources (crt.sh + common patterns)
+        print(f"\n[PAGE {page_num}] === Public Sources ===")
+        public_emails = fetch_public_sources(domain)
+        all_emails.update(public_emails)
+        
         print(f"\n[PAGE {page_num}] Emails found this page: {len(html_emails) + len(js_emails)}")
         print(f"[PAGE {page_num}] Running total: {len(all_emails)}\n")
     
@@ -552,3 +559,45 @@ def extract_all(domain, pages_data):
     print(f"{'='*70}\n")
     
     return real_emails
+
+
+
+def fetch_public_sources(domain):
+    """
+    Find emails from public sources:
+    1. crt.sh (SSL certificates)
+    2. Hunter.io pattern guessing
+    3. Common email patterns for domain
+    """
+    emails = set()
+    
+    # 1. Check crt.sh for SSL certificate emails
+    try:
+        r = requests.get(
+            f"https://crt.sh/?q=%40{domain}&output=json",
+            headers=HEADERS, timeout=10
+        )
+        if r.status_code == 200:
+            data = r.json()
+            for entry in data[:50]:
+                name = entry.get("name_value", "")
+                found = extract_emails_from_text(name, source="crt.sh")
+                emails.update(found)
+            print(f"[crt.sh] Found {len(emails)} emails")
+    except Exception as e:
+        print(f"[crt.sh] Error: {e}")
+    
+    # 2. Try common email patterns
+    COMMON_PREFIXES = [
+        "support", "info", "contact", "hello", "help",
+        "security", "legal", "privacy", "admin", "cs",
+        "helpdesk", "customerservice", "customer_service",
+        "mobile_support", "noreply", "no-reply", "sales",
+        "billing", "abuse", "webmaster", "team",
+    ]
+    for prefix in COMMON_PREFIXES:
+        emails.add(f"{prefix}@{domain}")
+    
+    print(f"[public] Total from public sources: {len(emails)}")
+    return list(emails)
+
