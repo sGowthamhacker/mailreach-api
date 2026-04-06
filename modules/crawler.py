@@ -393,7 +393,9 @@ def crawl(domain, log_callback=None):
         is_homepage = url.rstrip('/') == f"https://{domain}".rstrip('/')
         
         if is_hosting and is_homepage:
+            print(f"[DEBUG] Trying Playwright for {url}")
             content = fetch_with_playwright(url)
+            print(f"[DEBUG] Playwright returned: {len(content) if content else 'None'} bytes")
         
         if not content:
             r = safe_get(url, session)
