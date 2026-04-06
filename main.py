@@ -82,19 +82,19 @@ def scan_stream(req: ScanRequest):
             print(f"[SCAN-STREAM] Crawler version: 2.0 Production")
             print(f"{'='*70}\n")
             
-            send(f"ðŸ” Scanning {domain}...", "info")
-            send(f"ðŸŒ Building URL queue...", "info")
+            send(f"Scanning {domain}...", "info")
+            send(f"Building URL queue...", "info")
 
             def crawl_log(msg):
                 print(f"[CRAWL] {msg}")
                 if "[ok]" in msg:
-                    send(f"âœ… Crawled: {msg.replace('[ok]','').strip()}", "ok")
+                    send(f"Crawled: {msg.replace('[ok]','').strip()}", "ok")
                 elif "[skip]" in msg:
-                    send(f"â­ Skipped: {msg.replace('[skip]','').strip()}", "info")
+                    send(f"Skipped: {msg.replace('[skip]','').strip()}", "info")
                 elif "[done]" in msg:
-                    send(f"ðŸ {msg.replace('[done]','').strip()}", "ok")
+                    send(f"Done: {msg.replace('[done]','').strip()}", "ok")
                 elif "[CRAWLER]" in msg:
-                    send(f"ðŸ•·ï¸ {msg}", "info")
+                    send(f"{msg}", "info")
                 else:
                     send(msg, "info")
 
@@ -105,7 +105,7 @@ def scan_stream(req: ScanRequest):
             for i, page in enumerate(pages):
                 print(f"[SCAN-STREAM]   Page {i}: {page['url']} ({len(page['content'])} bytes)")
             
-            send(f"ðŸ“„ Crawled {len(pages)} pages â€” extracting emails...", "info")
+            send(f"Crawled {len(pages)} pages - extracting emails...", "info")
             
             print(f"[SCAN-STREAM] Calling extract_all({domain}, {len(pages)} pages)...")
             emails = extract_all(domain, pages)
@@ -114,22 +114,22 @@ def scan_stream(req: ScanRequest):
             if emails:
                 print(f"[SCAN-STREAM]   Emails: {emails[:5]}")
             
-            send(f"ðŸ“§ Found {len(emails)} raw emails", "info")
+            send(f"Found {len(emails)} raw emails", "info")
             
             clean = clean_emails(emails)
-            send(f"ðŸ§¹ Cleaned to {len(clean)} emails", "info")
+            send(f"Cleaned to {len(clean)} emails", "info")
             
             valid = validate_emails(clean, domain)
-            send(f"âœ”ï¸ Validated {len(valid)} emails", "ok")
+            send(f"Validated {len(valid)} emails", "ok")
             
             best = filter_best(valid)
-            send(f"â­ Selected {len(best)} best emails", "ok")
+            send(f"Selected {len(best)} best emails", "ok")
             
             bounty = detect_bounty(pages)
             if bounty["has_program"]:
-                send(f"ðŸŽ¯ Bug bounty detected: {bounty['type']}", "ok")
+                send(f"Bug bounty detected: {bounty['type']}", "ok")
             else:
-                send(f"â„¹ï¸ No bounty program found", "info")
+                send(f"No bounty program found", "info")
             
             print(f"[SCAN-STREAM] Sending final result...")
             log_queue.put({
@@ -153,7 +153,7 @@ def scan_stream(req: ScanRequest):
             print(f"\n[SCAN-STREAM] ERROR: {str(e)}")
             import traceback
             traceback.print_exc()
-            send(f"âŒ Error: {str(e)}", "err")
+            send(f"Error: {str(e)}", "err")
             log_queue.put({"type": "done", "emails": [], "bounty": None})
 
     threading.Thread(target=run_scan, daemon=True).start()
