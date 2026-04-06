@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 urllib3.disable_warnings()
 from config import MAX_PAGES_PER_DOMAIN, CRAWL_DELAY, REQUEST_TIMEOUT
 
-print("[CRAWLER] Module loaded - v3.0 Production")
+print("[CRAWLER] Module loaded - v4.0 Subdomain Edition")
 
 HEADERS_LIST = [
     {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"},
@@ -17,39 +17,88 @@ HEADERS_LIST = [
     {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0"},
 ]
 
-PRIORITY_KEYWORDS = [
-    "contact", "contact-us", "contactus", "reach", "reach-us",
-    "get-in-touch", "getintouch", "talk-to-us", "say-hello",
-    "connect", "enquiry", "inquiry", "email-us", "mail-us",
-    "message", "touch", "write-us", "write-to-us", "ping",
-    "about", "about-us", "aboutus", "our-story", "ourstory",
-    "who-we-are", "whoweare", "mission", "vision", "overview",
-    "introduction", "our-mission", "story",
-    "team", "people", "staff", "crew", "founders", "leadership",
-    "our-team", "meet-the-team", "executives", "management",
-    "board", "directors", "advisors", "employees",
-    "security", "disclosure", "responsible-disclosure",
-    "responsibledisclosure", "vulnerability", "vulnerability-disclosure",
-    "bounty", "bug-bounty", "bugbounty", "vdp", "bbp",
-    "report", "cvd", "pentest", "hackerone", "bugcrowd",
-    "intigriti", "yeswehack", "security-policy", "securitypolicy",
-    "security-research", "report-vulnerability", "hall-of-fame",
-    "support", "help", "faq", "helpdesk", "help-center",
-    "helpcenter", "helpcentre", "assistance", "customer-service",
-    "customerservice", "customer-support", "customersupport",
-    "ticket", "tickets",
-    "company", "corporate", "organization", "organisation",
-    "business", "partners", "investors", "press", "media",
-    "newsroom", "news", "blog", "updates", "announcements",
-    "pr", "communications",
-    "legal", "privacy", "terms", "policy", "compliance",
-    "gdpr", "cookies", "disclaimer", "tos", "terms-of-service",
-    "terms-of-use", "privacy-policy",
-    "careers", "jobs", "hiring", "work-with-us", "join-us",
-    "join", "work", "opportunities", "openings", "vacancies",
-    "positions", "recruitment",
-    "humans", "robots", "sitemap", "well-known",
-    "security.txt", "pgp", "gpg", "keys",
+COMMON_SUBDOMAINS = [
+    "www", "mail", "email", "webmail", "smtp", "imap", "pop", "mx",
+    "help", "support", "helpdesk", "kb", "docs", "documentation",
+    "blog", "news", "press", "media", "newsroom", "pr",
+    "about", "team", "careers", "jobs", "hiring", "recruit",
+    "contact", "info", "hello", "reach", "connect", "touch",
+    "security", "trust", "privacy", "legal", "compliance", "gdpr",
+    "developer", "developers", "dev", "api", "apis", "platform",
+    "status", "uptime", "monitor", "health", "ping",
+    "community", "forum", "forums", "discuss", "chat", "slack",
+    "partners", "partner", "affiliate", "affiliates", "reseller",
+    "investors", "ir", "investor",
+    "shop", "store", "checkout", "cart", "buy", "order",
+    "app", "mobile", "m", "wap",
+    "cdn", "static", "assets", "img", "images", "media",
+    "corp", "corporate", "business", "enterprise",
+    "admin", "portal", "dashboard", "panel", "console",
+    "learn", "learning", "training", "academy", "education",
+    "events", "conference", "meetup", "webinar",
+    "marketing", "sales", "crm", "leads",
+    "engineering", "tech", "technology", "infrastructure",
+    "cloud", "aws", "azure", "gcp",
+    "staging", "stage", "uat", "qa", "test", "demo", "sandbox",
+    "beta", "alpha", "preview", "next", "new",
+    "old", "legacy", "v1", "v2", "v3",
+    "secure", "ssl", "vpn", "remote", "access",
+    "intranet", "internal", "extranet",
+    "hr", "humanresources", "people", "talent",
+    "finance", "billing", "payments", "invoice", "accounting",
+    "legal", "contracts", "compliance",
+    "research", "labs", "lab", "innovation", "rd",
+    "design", "creative", "ux", "ui", "brand",
+    "content", "editorial", "publish", "cms",
+    "analytics", "data", "insights", "metrics", "stats",
+    "feedback", "survey", "form", "forms",
+    "abuse", "spam", "report", "phishing",
+    "noc", "ops", "devops", "sre", "infra",
+    "vpn", "proxy", "gateway", "edge",
+    "download", "downloads", "files", "ftp",
+    "upload", "uploads", "storage",
+    "backup", "archive", "logs",
+    "wiki", "knowledge", "base", "faq",
+    "open", "opensource", "github",
+    "global", "international", "worldwide",
+    "us", "uk", "eu", "in", "au", "ca", "de", "fr", "jp",
+    "asia", "apac", "emea", "latam", "amer",
+    "east", "west", "north", "south",
+    "ny", "la", "sf", "london", "paris", "berlin", "tokyo",
+    "signup", "register", "login", "auth", "sso", "id",
+    "account", "accounts", "profile", "user", "users",
+    "customer", "customers", "client", "clients",
+    "vendor", "vendors", "supplier", "suppliers",
+    "network", "net", "dns", "whois",
+    "tools", "tool", "utility", "utilities",
+    "project", "projects", "work", "workspace",
+    "org", "foundation", "charity", "nonprofit",
+    "ceo", "cto", "cfo", "board", "exec", "executives",
+    "office", "offices", "hq", "headquarters",
+    "newsletter", "subscribe", "updates", "alerts",
+    "search", "find", "discover",
+    "home", "main", "index", "root",
+    "public", "open", "free",
+    "pro", "premium", "plus", "elite",
+    "solutions", "services", "products",
+    "hosting", "cloud", "saas", "paas",
+    "monitor", "monitoring", "alert", "alerting",
+    "ticket", "tickets", "issue", "issues", "bugs",
+    "release", "releases", "changelog", "updates",
+    "social", "connect", "network",
+    "video", "videos", "media", "stream",
+    "podcast", "audio", "radio",
+    "map", "maps", "location", "locations",
+    "jobs2", "careers2", "apply",
+    "internship", "intern", "graduate",
+    "csr", "sustainability", "green", "environment",
+    "safety", "risk", "fraud", "verify",
+    "id", "identity", "passport", "verify",
+    "pay", "payment", "checkout", "subscribe",
+    "trial", "free", "freemium",
+    "partner2", "ecosystem", "marketplace",
+    "white-label", "whitelabel", "oem",
+    "resellers", "channel", "distribution",
 ]
 
 SEED_PATHS = [
@@ -63,161 +112,68 @@ SEED_PATHS = [
     "/press", "/media", "/newsroom", "/news",
     "/legal", "/privacy", "/terms",
     "/careers", "/jobs", "/blog",
-    "/reach", "/reach-us", "/reach_us", "/reachout",
-    "/get-in-touch", "/getintouch", "/get_in_touch",
-    "/talk-to-us", "/talktous", "/talk_to_us",
-    "/say-hello", "/sayhello", "/hello",
-    "/connect", "/connect-with-us", "/connectwithus",
+    "/reach", "/reach-us", "/get-in-touch", "/getintouch",
+    "/talk-to-us", "/say-hello", "/hello", "/connect",
     "/enquiry", "/enquiries", "/inquiry", "/inquiries",
-    "/email", "/email-us", "/emailus", "/mail", "/mail-us",
-    "/message", "/messages", "/message-us",
-    "/write-to-us", "/write-us", "/writeus",
-    "/ping", "/drop-us-a-line", "/drop-a-line",
-    "/lets-talk", "/letstalk", "/lets_talk",
-    "/get-help", "/gethelp", "/ask",
-    "/feedback", "/feedbacks", "/suggestions",
-    "/report", "/reports", "/submit",
-    "/hire-us", "/hireus", "/hire_us",
-    "/work-with-us", "/workwithus", "/work_with_us",
-    "/partner-with-us", "/partnerwithus",
-    "/our-story", "/ourstory", "/our_story",
-    "/who-we-are", "/whoweare", "/who_we_are",
-    "/mission", "/our-mission", "/ourmission",
-    "/vision", "/our-vision", "/ourvision",
-    "/values", "/our-values", "/ourvalues",
-    "/overview", "/introduction", "/intro",
-    "/history", "/background", "/profile",
-    "/manifesto", "/philosophy", "/culture",
-    "/meet-the-team", "/meettheteam", "/meet_the_team",
-    "/meet-us", "/meetus", "/our-people", "/ourpeople",
+    "/email", "/email-us", "/mail", "/message", "/feedback",
+    "/our-story", "/ourstory", "/who-we-are", "/whoweare",
+    "/mission", "/vision", "/values", "/overview",
     "/leadership", "/leaders", "/management",
-    "/founders", "/founder", "/co-founders", "/cofounders",
-    "/executives", "/executive-team", "/executiveteam",
-    "/board", "/board-of-directors", "/boardofdirectors",
-    "/advisors", "/advisory-board", "/advisoryboard",
-    "/directors", "/officers", "/c-suite", "/csuite",
-    "/employees", "/members", "/contributors",
-    "/security-policy", "/securitypolicy", "/security_policy",
-    "/security-research", "/securityresearch",
-    "/security-disclosure", "/securitydisclosure",
-    "/responsible-disclosure", "/responsibledisclosure",
-    "/responsible_disclosure", "/coordinated-disclosure",
-    "/vulnerability-disclosure", "/vulnerabilitydisclosure",
-    "/vulnerability_disclosure", "/vulnerability-reporting",
-    "/bug-bounty", "/bugbounty", "/bug_bounty",
-    "/bounty", "/bounty-program", "/bountyprogram",
-    "/vdp", "/bbp", "/cvd", "/pentest",
-    "/hackerone", "/bugcrowd", "/intigriti",
-    "/yeswehack", "/openbugbounty",
-    "/report-vulnerability", "/reportvulnerability",
-    "/report-a-bug", "/reportabug", "/report-bug",
-    "/hall-of-fame", "/halloffame", "/hof",
-    "/thanks", "/acknowledgements", "/acknowledgments",
-    "/security-advisories", "/advisories",
-    "/cve", "/cves", "/patches", "/patch-notes",
-    "/pgp", "/gpg", "/publickey", "/public-key",
-    "/keys", "/.well-known/pgp-key.txt",
-    "/.well-known/gpg-key.txt",
-    "/helpdesk", "/help-desk", "/help-center",
-    "/helpcenter", "/help_center", "/helpcentre",
+    "/founders", "/executives", "/board", "/advisors",
+    "/security-policy", "/responsible-disclosure",
+    "/vulnerability-disclosure", "/bug-bounty", "/bugbounty",
+    "/vdp", "/bbp", "/hackerone", "/bugcrowd",
+    "/hall-of-fame", "/halloffame",
+    "/helpdesk", "/help-center", "/helpcenter",
     "/customer-service", "/customerservice",
     "/customer-support", "/customersupport",
-    "/customer-care", "/customercare",
-    "/tickets", "/open-ticket", "/new-ticket",
-    "/submit-ticket", "/support-ticket",
-    "/knowledge-base", "/knowledgebase", "/kb",
-    "/documentation", "/docs", "/wiki",
-    "/guides", "/tutorials", "/resources",
-    "/forum", "/forums", "/community",
-    "/chat", "/live-chat", "/livechat",
+    "/knowledge-base", "/knowledgebase", "/docs",
     "/terms-of-service", "/termsofservice", "/tos",
-    "/terms-of-use", "/termsofuse", "/tou",
     "/privacy-policy", "/privacypolicy",
-    "/cookie-policy", "/cookiepolicy", "/cookies",
-    "/disclaimer", "/disclaimers",
-    "/compliance", "/gdpr", "/ccpa",
-    "/aup", "/acceptable-use", "/acceptableuse",
-    "/dmca", "/copyright", "/ip-policy",
-    "/data-protection", "/dataprotection",
-    "/hiring", "/we-are-hiring", "/wearehiring",
-    "/join", "/join-us", "/joinus", "/join_us",
-    "/join-our-team", "/joinourteam",
-    "/openings", "/open-positions", "/openpositions",
-    "/vacancies", "/vacancy", "/positions",
-    "/recruitment", "/recruit", "/apply",
-    "/internships", "/internship", "/intern",
-    "/press-kit", "/presskit", "/press_kit",
-    "/press-releases", "/pressreleases",
-    "/press-room", "/pressroom",
-    "/media-kit", "/mediakit", "/media_kit",
-    "/media-contact", "/mediacontact",
-    "/journalists", "/editorial",
-    "/brand", "/brand-assets", "/brandassets",
-    "/logo", "/logos", "/assets",
-    "/investors", "/investor-relations", "/investorrelations",
-    "/partners", "/partnerships", "/partner",
-    "/affiliates", "/affiliate", "/resellers",
-    "/vendors", "/suppliers",
-    "/customers", "/clients", "/case-studies",
-    "/testimonials", "/reviews",
-    "/updates", "/changelog", "/release-notes",
-    "/announcements", "/announcement",
-    "/events", "/event", "/webinars", "/webinar",
-    "/api", "/api/contact", "/developer",
-    "/developers", "/dev", "/open-source",
-    "/opensource", "/github", "/contributing",
+    "/compliance", "/gdpr", "/dmca",
+    "/hiring", "/join", "/press-kit", "/presskit",
+    "/investors", "/investor-relations",
+    "/partners", "/partnerships",
+    "/api", "/developer", "/developers",
     "/imprint", "/impressum",
-    "/trust", "/trust-center", "/trustcenter",
-    "/offices", "/office", "/locations", "/location",
-    "/headquarters", "/hq",
+    "/trust", "/trust-center",
+    "/offices", "/locations", "/headquarters",
     "/newsletter", "/subscribe",
     "/sales", "/marketing", "/billing",
-    "/info", "/information",
+    "/events", "/webinars", "/updates", "/changelog",
+    "/community", "/forum",
 ]
 
-
-def fetch_with_playwright(url):
-    try:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=[
-                "--no-sandbox", "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage", "--disable-gpu"
-            ])
-            page = browser.new_page()
-            page.goto(url, timeout=10000, wait_until="domcontentloaded")
-            page.wait_for_timeout(2000)
-            content = page.content()
-            browser.close()
-            return content
-    except Exception as e:
-        print(f"[Playwright] Error: {e}")
-        return None
-
+PRIORITY_KEYWORDS = [
+    "contact", "about", "security", "team", "help", "support",
+    "reach", "hello", "connect", "email", "touch", "inquiry",
+    "enquiry", "disclosure", "bounty", "vdp", "press", "legal",
+    "privacy", "careers", "jobs", "people", "leadership",
+]
 
 def get_session():
     s = requests.Session()
     s.headers.update(random.choice(HEADERS_LIST))
     return s
 
-
-def safe_get(url, session):
+def safe_get(url, session, timeout=5):
     try:
-        r = session.get(url, timeout=5, verify=True)
+        r = session.get(url, timeout=timeout, verify=False)
         if r.status_code == 200:
             return r
         return None
-    except requests.exceptions.SSLError:
-        try:
-            r = session.get(url, timeout=5, verify=False)
-            if r.status_code == 200:
-                return r
-            return None
-        except:
-            return None
     except:
         return None
 
+def fetch_url_parallel(url):
+    try:
+        s = get_session()
+        r = s.get(url, timeout=5, verify=False)
+        if r.status_code == 200 and len(r.text) > 200:
+            return url, r.text
+        return url, None
+    except:
+        return url, None
 
 def score_link(url):
     url_lower = url.lower()
@@ -226,44 +182,62 @@ def score_link(url):
             return len(PRIORITY_KEYWORDS) - i
     return 0
 
-
 def get_links(base_url, html, domain):
     links = []
     try:
         soup = BeautifulSoup(html, "html.parser")
-        priority_links = set()
-        for tag in soup.find_all(['nav', 'footer', 'header']):
-            for a in tag.find_all("a", href=True):
-                full = urljoin(base_url, a["href"])
-                parsed = urlparse(full)
-                if domain in parsed.netloc:
-                    priority_links.add(f"{parsed.scheme}://{parsed.netloc}{parsed.path}")
         all_links = set()
         for tag in soup.find_all("a", href=True):
             full = urljoin(base_url, tag["href"])
             parsed = urlparse(full)
             if domain in parsed.netloc:
                 all_links.add(f"{parsed.scheme}://{parsed.netloc}{parsed.path}")
-        scored = []
-        for link in all_links:
-            score = score_link(link)
-            if link in priority_links:
-                score += 10
-            scored.append((score, link))
+        scored = [(score_link(l), l) for l in all_links]
         scored.sort(reverse=True)
         links = [l for _, l in scored]
     except:
         pass
     return links
 
+def discover_subdomains(domain, session):
+    subdomains = []
+    parts = domain.split(".")
+    root = ".".join(parts[-2:]) if len(parts) > 2 else domain
+
+    def check_subdomain(sub):
+        url = f"https://{sub}.{root}/"
+        try:
+            s = get_session()
+            r = s.get(url, timeout=4, verify=False)
+            if r.status_code in [200, 301, 302, 403]:
+                parsed = urlparse(r.url)
+                if root in parsed.netloc:
+                    return f"{parsed.scheme}://{parsed.netloc}/"
+            return None
+        except:
+            return None
+
+    print(f"[SUBDOMAIN] Checking {len(COMMON_SUBDOMAINS)} subdomains for {root}...")
+    with ThreadPoolExecutor(max_workers=50) as executor:
+        futures = {executor.submit(check_subdomain, sub): sub for sub in COMMON_SUBDOMAINS}
+        for future in as_completed(futures, timeout=25):
+            try:
+                result = future.result()
+                if result:
+                    subdomains.append(result)
+                    print(f"[SUBDOMAIN] Found: {result}")
+            except:
+                pass
+
+    unique = list(set(subdomains))
+    print(f"[SUBDOMAIN] Total found: {len(unique)}")
+    return unique
 
 def get_sitemap_urls(domain, session):
     urls = set()
     sitemaps = [
         f"https://{domain}/sitemap.xml",
         f"https://{domain}/sitemap_index.xml",
-        f"https://{domain}/sitemap-index.xml",
-        f"https://{domain}/sitemaps.xml",
         f"https://www.{domain}/sitemap.xml",
     ]
     for sitemap_url in sitemaps:
@@ -277,39 +251,65 @@ def get_sitemap_urls(domain, session):
                     break
         except:
             pass
-    return list(urls)[:MAX_PAGES_PER_DOMAIN]
-
+    return list(urls)[:50]
 
 def get_robots_paths(domain, session):
     paths = []
     try:
         r = safe_get(f"https://{domain}/robots.txt", session)
         if r:
-            for line in r.text.split('\n'):
+            for line in r.text.split("\n"):
                 line = line.strip()
-                if line.lower().startswith('sitemap:'):
-                    sitemap_url = line.split(':', 1)[1].strip()
-                    paths.append(sitemap_url)
-                elif line.lower().startswith('allow:') or line.lower().startswith('disallow:'):
-                    path = line.split(':', 1)[1].strip()
-                    if path and path != '/':
+                if line.lower().startswith("sitemap:"):
+                    paths.append(line.split(":", 1)[1].strip())
+                elif line.lower().startswith("allow:") or line.lower().startswith("disallow:"):
+                    path = line.split(":", 1)[1].strip()
+                    if path and path != "/" and "*" not in path:
                         paths.append(f"https://{domain}{path}")
     except:
         pass
     return paths
 
+def crawl_batch(to_visit, domain, max_pages, log):
+    pages_data = []
+    visited = set()
+    crawled = 0
+    i = 0
 
-def fetch_url_parallel(url):
-    """Fetch single URL for parallel crawling"""
-    try:
-        s = get_session()
-        r = s.get(url, timeout=5, verify=False)
-        if r.status_code == 200 and len(r.text) > 500:
-            return url, r.text
-        return url, None
-    except:
-        return url, None
+    while i < len(to_visit) and crawled < max_pages:
+        batch = []
+        while len(batch) < 30 and i < len(to_visit):
+            url = to_visit[i]
+            i += 1
+            if url not in visited:
+                visited.add(url)
+                batch.append(url)
 
+        if not batch:
+            break
+
+        with ThreadPoolExecutor(max_workers=30) as executor:
+            futures = {executor.submit(fetch_url_parallel, url): url for url in batch}
+            for future in as_completed(futures, timeout=15):
+                try:
+                    url, content = future.result()
+                    if content:
+                        log(f"[ok] {url}")
+                        pages_data.append({"url": url, "content": content})
+                        crawled += 1
+                        new_links = get_links(url, content, domain)
+                        for link in new_links:
+                            if link not in visited and link not in to_visit:
+                                to_visit.append(link)
+                    else:
+                        log(f"[skip] {url}")
+                except:
+                    pass
+
+        if crawled >= max_pages:
+            break
+
+    return pages_data
 
 def crawl(domain, log_callback=None):
     def log(msg):
@@ -317,39 +317,54 @@ def crawl(domain, log_callback=None):
         if log_callback:
             log_callback(msg)
 
-    log(f"[CRAWLER v3.0] Starting crawl for {domain}")
-
+    log(f"[CRAWLER v4.0] Starting crawl for {domain}")
     session = get_session()
 
-    # Detect SPA
     SPA_PLATFORMS = ["vercel.app", "netlify.app", "github.io", "pages.dev", "herokuapp.com"]
-    is_spa = any(platform in domain for platform in SPA_PLATFORMS)
-
+    is_spa = any(p in domain for p in SPA_PLATFORMS)
     log(f"[CRAWLER] Domain type: {'SPA' if is_spa else 'NORMAL'}")
 
     pages_data = []
 
     if is_spa:
-        log(f"[CRAWLER] Using Playwright for SPA homepage")
-        homepage = f"https://{domain}/"
-        content = fetch_with_playwright(homepage)
-        if content:
-            log(f"[ok] {homepage} (Playwright)")
-            pages_data.append({"url": homepage, "content": content})
-        else:
-            r = safe_get(homepage, session)
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True, args=["--no-sandbox","--disable-gpu"])
+                page = browser.new_page()
+                page.goto(f"https://{domain}/", timeout=10000, wait_until="domcontentloaded")
+                page.wait_for_timeout(2000)
+                content = page.content()
+                browser.close()
+                pages_data.append({"url": f"https://{domain}/", "content": content})
+        except:
+            r = safe_get(f"https://{domain}/", session)
             if r:
-                log(f"[ok] {homepage} (HTTP)")
-                pages_data.append({"url": homepage, "content": r.text})
+                pages_data.append({"url": f"https://{domain}/", "content": r.text})
     else:
-        # Build seed URLs
-        to_visit = [f"https://{domain}{path}" for path in SEED_PATHS]
+        # Step 1: Discover subdomains
+        subdomains = discover_subdomains(domain, session)
 
-        # Add sitemap URLs
+        # Step 2: Build URL list — main domain + all subdomains
+        to_visit = []
+        parts = domain.split(".")
+        root = ".".join(parts[-2:]) if len(parts) > 2 else domain
+        all_bases = [f"https://{domain}", f"https://www.{domain}"] + [s.rstrip("/") for s in subdomains]
+        # Remove duplicates
+        seen_bases = set()
+        unique_bases = []
+        for b in all_bases:
+            if b not in seen_bases:
+                seen_bases.add(b)
+                unique_bases.append(b)
+
+        for base in unique_bases:
+            for path in SEED_PATHS:
+                to_visit.append(f"{base}{path}")
+
+        # Step 3: Sitemap + robots
         sitemap_urls = get_sitemap_urls(domain, session)
         to_visit.extend(sitemap_urls)
-
-        # Add robots.txt paths
         robots_paths = get_robots_paths(domain, session)
         to_visit.extend(robots_paths)
 
@@ -362,45 +377,10 @@ def crawl(domain, log_callback=None):
                 deduped.append(url)
         to_visit = deduped
 
-        log(f"[CRAWLER] Queued {len(to_visit)} URLs to crawl")
+        log(f"[CRAWLER] Queued {len(to_visit)} URLs across {len(unique_bases)} domains/subdomains")
 
-        visited = set()
-        crawled = 0
-        i = 0
-
-        # Parallel crawling in batches of 20
-        while i < len(to_visit) and crawled < 50:
-            # Build batch
-            batch = []
-            while len(batch) < 20 and i < len(to_visit):
-                url = to_visit[i]
-                i += 1
-                if url not in visited:
-                    visited.add(url)
-                    batch.append(url)
-
-            if not batch:
-                break
-
-            # Fetch batch in parallel
-            with ThreadPoolExecutor(max_workers=20) as executor:
-                futures = {executor.submit(fetch_url_parallel, url): url for url in batch}
-                for future in as_completed(futures):
-                    url, content = future.result()
-                    if content:
-                        log(f"[ok] {url}")
-                        pages_data.append({"url": url, "content": content})
-                        crawled += 1
-                        # Extract new links
-                        new_links = get_links(url, content, domain)
-                        for link in new_links:
-                            if link not in visited and link not in to_visit:
-                                to_visit.append(link)
-                    else:
-                        log(f"[skip] {url}")
-
-            if crawled >= 100:
-                break
+        # Step 4: Crawl with 30 parallel workers
+        pages_data = crawl_batch(to_visit, root, MAX_PAGES_PER_DOMAIN, log)
 
     log(f"[CRAWLER] Done - {len(pages_data)} pages crawled")
     return pages_data
