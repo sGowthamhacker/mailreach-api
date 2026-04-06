@@ -355,7 +355,121 @@ def get_robots_paths(domain, session):
         pass
     return paths
 
-def crawl(domain, log_callback=None):
+def extract_all(domain, pages_data):
+    all_emails = set()
+    print(f"[extract_all] Called with {len(pages_data)} pages")
+    print(f"[extract_all] pages_data type: {type(pages_data)}")
+    
+    if not pages_data:
+        print(f"[extract_all] ERROR: pages_data is empty!")
+        return []
+    
+    for i, page in enumerate(pages_data):
+        print(f"[extract_all] Page {i}: {page}")
+        print(f"[extract_all] Page keys: {page.keys() if isinstance(page, dict) else 'NOT A DICT'}")
+        
+        url = page.get("url", "NO_URL")
+        content = page.get("content", None)
+        
+        print(f"[extract_all] URL: {url}")
+        print(f"[extract_all] Content type: {type(content)}, is None: {content is None}")
+        
+        if content:
+            print(f"[extract_all] Content length: {len(content)}")
+            print(f"[extract_all] First 300 chars: {content[:300]}")
+        
+        if not content:
+            print(f"[extract_all] SKIPPING - content is empty/None")
+            continue
+        
+        print(f"[extract_all] Calling extract_from_html...")
+        found = extract_from_html(content)
+        print(f"[extract_all] extract_from_html returned {len(found)} emails: {found}")
+        
+        all_emails.update(found)
+        
+        js_emails = extract_from_js_files(domain, content)
+        print(f"[extract_all] extract_from_js_files returned {len(js_emails)} emails")
+        all_emails.update(js_emails)
+
+    print(f"  [FINAL] {len(all_emails)} total emails found: {list(all_emails)}")
+    return list(all_emails)
+    def log(msg):
+        print(msg)
+        if log_callback:
+            log_callback(msg)
+
+    session = get_session()
+    visited = set()
+
+    to_visit = [f"https://{domain}{path}" for path in SEED_PATHS]
+    sitemap_urls = get_sitemap_urls(domain, session)
+    to_visit.extend(sitemap_urls)
+    robots_paths = get_robots_paths(domain, session)
+    to_visit.extend(robots_paths)
+
+    seen = set()
+    deduped = []
+    for url in to_visit:
+        if url not in seen:
+            seen.add(url)
+            deduped.append(url)
+    to_visit = deduped
+
+    pages_data = []
+    log(f"[crawl] Starting {domain} — {len(to_visit)} URLs queued")
+
+    # Static file extensions to skip
+    SKIP_EXTENSIONS = ['.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', 
+                       '.ico', '.woff', '.woff2', '.ttf', '.eot', '.pdf', '.zip', '.tar', 
+                       '.gz', '.mp4', '.mp3', '.wav', '.mov']
+
+    while to_visit and len(visited) < 50:  # Limit to 50 pages
+        url = to_visit.pop(0)
+        if url in visited:
+            continue
+        visited.add(url)
+
+        # Skip static files
+        is_static = any(url.lower().endswith(ext) for ext in SKIP_EXTENSIONS)
+        if is_static:
+            log(f"[skip] {url} (static file)")
+            continue
+
+        # Try Playwright for hosting platforms on homepage
+        content = None
+        HOSTING_PLATFORMS = ["vercel.app", "netlify.app", "github.io", "pages.dev"]
+        is_hosting = any(p in domain for p in HOSTING_PLATFORMS)
+        is_homepage = url.rstrip('/') == f"https://{domain}".rstrip('/')
+        
+        if is_hosting and is_homepage:
+            print(f"[CRAWL] Using Playwright for homepage: {url}")
+            content = fetch_with_playwright(url)
+            print(f"[CRAWL] Playwright returned: {len(content) if content else 'None'} bytes")
+        
+        # If no Playwright content or not hosting platform, use regular HTTP
+        if not content:
+            r = safe_get(url, session)
+            if r:
+                content = r.text
+            else:
+                log(f"[skip] {url} (HTTP failed)")
+                continue
+        
+        log(f"[ok] {url}")
+        pages_data.append({"url": url, "content": content})
+
+        # Extract links only if we haven't hit the limit yet
+        if len(visited) < 50:
+            new_links = get_links(url, content, domain)
+            for link in new_links:
+                if link not in visited and link not in to_visit:
+                    to_visit.insert(0, link)
+
+        time.sleep(0.5)  # Reduced from CRAWL_DELAY for speed
+
+    log(f"[done] {len(pages_data)} pages crawled")
+    return pages_data
     def log(msg):
         print(msg)
         if log_callback:
