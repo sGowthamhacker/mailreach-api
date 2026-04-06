@@ -3,8 +3,5 @@ uvicorn
 requests
 beautifulsoup4
 dnspython
-pandas
 lxml
-tqdm
-playwright==1.49.0
 python-whois

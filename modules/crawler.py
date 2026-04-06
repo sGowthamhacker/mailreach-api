@@ -159,6 +159,14 @@ PRIORITY_KEYWORDS = [
 def get_session():
     s = requests.Session()
     s.headers.update(random.choice(HEADERS_LIST))
+    s.verify = False
+    # Force IPv4 to avoid DNS issues
+    import socket
+    old_getaddrinfo = socket.getaddrinfo
+    def new_getaddrinfo(*args, **kwargs):
+        kwargs["family"] = socket.AF_INET
+        return old_getaddrinfo(*args, **kwargs)
+    socket.getaddrinfo = new_getaddrinfo
     return s
 
 def safe_get(url, session, timeout=5):
@@ -398,6 +406,8 @@ def crawl(domain, log_callback=None, scan_subdomains=True):
 
     log(f"[CRAWLER] Done - {len(pages_data)} pages crawled")
     return pages_data
+
+
 
 
 
