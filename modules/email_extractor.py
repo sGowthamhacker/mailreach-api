@@ -783,21 +783,5 @@ def extract_all(domain, pages_data):
             print(f"  [js] {len(js_emails)} emails from JS at {url}")
         all_emails.update(js_emails)
 
-    # Extra web paths
-    extra = fetch_extra_sources(domain)
-    all_emails.update(extra)
-
-    # Public sources
-    fetch_public_sources(domain, all_emails)
-
-    # Pattern guessing — always run
-    guessed = guess_emails(domain)
-    if guessed:
-        all_emails.update(guessed)
-        print(f"  [guess] {len(guessed)} pattern emails added")
-
-    if not pages_data:
-        print(f"  [warn] 0 pages crawled — using guessed + public sources only")
-
     print(f"  [total] {len(all_emails)} raw emails found")
     return list(all_emails)
