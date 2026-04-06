@@ -26,14 +26,18 @@ FAKE_PREFIXES = [
 ]
 
 def is_fake_email(email):
+    """Only filter obvious fake emails, not package names"""
     domain = email.split("@")[1].lower()
     prefix = email.split("@")[0].lower()
-    if domain in FAKE_DOMAINS:
+    
+    # Only block OBVIOUSLY fake domains
+    if domain in ["example.com", "example.org", "test.com", "fake.com"]:
         return True
-    if prefix in FAKE_PREFIXES:
-        return True
+    
+    # Block image file extensions
     if any(ext in prefix for ext in [".png", ".jpg", ".svg", ".gif", ".webp"]):
         return True
+    
     return False
 
 def extract_emails_from_text(text):
@@ -767,6 +771,24 @@ def guess_emails(domain):
     return [f"{prefix}@{root}" for prefix in EMAIL_PREFIXES]
 
 def extract_all(domain, pages_data):
+    all_emails = set()
+    print(f"[extract_all] Called with {len(pages_data)} pages")
+    
+    for page in pages_data:
+        url = page["url"]
+        content = page["content"]
+        print(f"[extract_all] Processing {url}, content: {len(content)} bytes")
+        
+        found = extract_from_html(content)
+        print(f"[extract_all] Found {len(found)} emails from HTML: {found}")
+        all_emails.update(found)
+        
+        js_emails = extract_from_js_files(domain, content)
+        print(f"[extract_all] Found {len(js_emails)} emails from JS: {js_emails}")
+        all_emails.update(js_emails)
+    
+    print(f"[extract_all] TOTAL: {len(all_emails)} emails found")
+    return list(all_emails)
     all_emails = set()
     print(f"[extract_all] Called with {len(pages_data)} pages")
     print(f"[extract_all] pages_data type: {type(pages_data)}")
