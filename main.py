@@ -69,6 +69,7 @@ def scan_stream(req: ScanRequest):
             send(f"🌐 Building URL queue...", "info")
 
             def crawl_log(msg):
+                print(f"[CRAWL_LOG] {msg}")
                 if "[ok]" in msg:
                     send(f"✅ Crawled: {msg.replace('[ok]','').strip()}", "ok")
                 elif "[skip]" in msg:
@@ -80,9 +81,15 @@ def scan_stream(req: ScanRequest):
                 else:
                     send(msg, "info")
 
+            print(f"[RUN_SCAN] Starting crawl for {domain}")
             pages = crawl(domain, log_callback=crawl_log)
+            print(f"[RUN_SCAN] Crawl returned {len(pages)} pages")
+            for i, page in enumerate(pages):
+                print(f"[RUN_SCAN] Page {i}: URL={page['url']}, content_length={len(page['content'])}")
             send(f"📄 Crawled {len(pages)} pages — extracting emails...", "info")
+            print(f"[RUN_SCAN] Calling extract_all with {len(pages)} pages")
             emails = extract_all(domain, pages)
+            print(f"[RUN_SCAN] extract_all returned {len(emails)} emails: {emails[:3] if emails else []}")
             send(f"📧 Found {len(emails)} raw emails", "info")
             clean = clean_emails(emails)
             filtered = clean
@@ -141,20 +148,17 @@ async def check_mx(req: MxCheckRequest):
     return {"email": email, "mx_ok": mx_ok, "smtp_ok": mx_ok, "domain": domain, "mx_hosts": [str(m.exchange).rstrip(".") for m in mx_hosts[:3]]}
 
 @app.get("/debug-page")
-async def debug_page():
+def debug_page():
     try:
-        from playwright.async_api import async_playwright
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True, args=["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage","--disable-gpu"])
-            page = await browser.new_page()
-            await page.goto("https://gowthamprofile.vercel.app/", timeout=15000)
-            await page.wait_for_timeout(2000)
-            content = await page.content()
-            await browser.close()
+        from modules.crawler import fetch_with_playwright
+        content = fetch_with_playwright("https://gowthamprofile.vercel.app/")
+        if content:
             emails = extract_emails_from_text(content)
-            return {"length": len(content), "emails_found": emails, "gmail": "gmail" in content.lower()}
+            return {"status": "success", "length": len(content), "emails": emails}
+        else:
+            return {"status": "failed", "error": "Playwright returned None"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"status": "error", "error": str(e)}
 
 @app.get("/debug")
 def debug():
