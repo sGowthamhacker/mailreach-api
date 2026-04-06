@@ -479,6 +479,94 @@ def extract_from_js_files(domain, html):
 # ============================================================================
 
 def extract_all(domain, pages_data):
+    all_emails = set()
+
+    print(f"\n[EXTRACT] Starting extraction from {len(pages_data)} pages")
+
+    # Public sources ONCE (crt.sh + WHOIS + 200 patterns)
+    print(f"[EXTRACT] Fetching public sources...")
+    public_emails = fetch_public_sources(domain)
+    all_emails.update(public_emails)
+    print(f"[EXTRACT] Public sources: {len(public_emails)} emails")
+
+    # Priority pages for deep JS scan (top 5 only)
+    PRIORITY_KEYWORDS = ["contact", "about", "security", "team", "help", "support"]
+    
+    priority_pages = []
+    normal_pages = []
+    
+    for page in pages_data:
+        url = page.get("url", "").lower()
+        if any(k in url for k in PRIORITY_KEYWORDS):
+            priority_pages.append(page)
+        else:
+            normal_pages.append(page)
+    
+    # Take top 5 priority + homepage
+    homepage = [p for p in pages_data if p.get("url", "").rstrip("/").endswith(domain)]
+    deep_scan_pages = homepage[:1] + priority_pages[:4]
+    quick_scan_pages = [p for p in pages_data if p not in deep_scan_pages]
+
+    print(f"[EXTRACT] Deep scan: {len(deep_scan_pages)} pages (HTML + JS)")
+    print(f"[EXTRACT] Quick scan: {len(quick_scan_pages)} pages (HTML only)")
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # Deep scan — HTML + JS (priority pages)
+    def deep_process(page):
+        page_emails = set()
+        content = page.get("content", "")
+        if not content:
+            return []
+        html_emails = extract_from_html(content)
+        page_emails.update(html_emails)
+        if "<script" in content:
+            js_emails = extract_from_js_files(domain, content)
+            page_emails.update(js_emails)
+        return list(page_emails)
+
+    # Quick scan — HTML only (remaining pages)
+    def quick_process(page):
+        content = page.get("content", "")
+        if not content:
+            return []
+        return extract_from_html(content)
+
+    # Run deep scan in parallel (5 workers)
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(deep_process, page): page for page in deep_scan_pages}
+        for future in as_completed(futures, timeout=60):
+            try:
+                result = future.result()
+                all_emails.update(result)
+            except Exception as e:
+                print(f"[EXTRACT] Deep scan error: {e}")
+
+    # Run quick scan in parallel (10 workers - faster)
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(quick_process, page): page for page in quick_scan_pages}
+        for future in as_completed(futures, timeout=30):
+            try:
+                result = future.result()
+                all_emails.update(result)
+            except Exception as e:
+                print(f"[EXTRACT] Quick scan error: {e}")
+
+    # Final filtering
+    real_emails = []
+    fake_emails = []
+    for email in sorted(all_emails):
+        if is_fake_email(email):
+            fake_emails.append(email)
+        else:
+            real_emails.append(email)
+
+    print(f"[FINAL] Total: {len(all_emails)}")
+    print(f"[FINAL] Real: {len(real_emails)}")
+    print(f"[FINAL] Filtered: {len(fake_emails)}")
+    print(f"[FINAL] Emails: {real_emails[:10]}")
+
+    return real_emails(domain, pages_data):
 
     
     """
