@@ -1,829 +1,527 @@
 import re
 import sys
 import json
-sys.stdout.reconfigure(encoding='utf-8')
 import requests
 from bs4 import BeautifulSoup
 from config import EMAIL_PREFIXES
 
-EMAIL_REGEX = r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}'
+sys.stdout.reconfigure(encoding='utf-8')
+
+# ============================================================================
+# CONFIGURATION & PATTERNS
+# ============================================================================
+
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
-FAKE_DOMAINS = [
-    "example.com", "example.org", "test.com", "fake.com",
-    "domain.com", "email.com", "yoursite.com", "website.com",
-    "sentry.io", "sentry.com", "w3.org", "schema.org",
-    "googleapis.com", "gstatic.com", "cloudflare.com",
-]
+# Stronger email regex patterns
+EMAIL_PATTERNS = {
+    "primary": r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}',
+    "obfuscated_at": r'([a-zA-Z0-9._\-]+)\s+at\s+([a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})',
+    "obfuscated_bracket": r'([a-zA-Z0-9._\-]+)\s*\[\s*at\s*\]\s*([a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})',
+    "obfuscated_space": r'([a-zA-Z0-9._\-]+)\s+\(\s*at\s*\)\s+([a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})',
+}
 
-FAKE_PREFIXES = [
-    "jane.doe", "john.doe", "guest", "you",
-    "new.email", "user", "someone", "username",
-    "name", "firstname", "lastname", "fullname",
-]
+# ============================================================================
+# FAKE EMAIL DETECTION - SMART FILTERING
+# ============================================================================
 
 def is_fake_email(email):
-    """Only filter obvious fake emails, not package names"""
-    domain = email.split("@")[1].lower()
-    prefix = email.split("@")[0].lower()
+    """
+    Smart filtering: Keep real business emails, remove only obvious fakes.
     
-    # Only block OBVIOUSLY fake domains
-    if domain in ["example.com", "example.org", "test.com", "fake.com"]:
+    KEEP: support@, info@, contact@, hello@, sales@, team@, etc.
+    REMOVE: react@, redux@, example.com, test.com, placeholder patterns
+    """
+    if not email or "@" not in email:
         return True
     
-    # Block image file extensions
-    if any(ext in prefix for ext in [".png", ".jpg", ".svg", ".gif", ".webp"]):
+    try:
+        prefix, domain = email.rsplit("@", 1)
+    except:
         return True
     
+    domain = domain.lower().strip()
+    prefix = prefix.lower().strip()
+    
+    # ===== DEFINITELY FAKE =====
+    
+    # Fake/test domains
+    FAKE_DOMAINS = {
+        "example.com", "example.org", "example.net",
+        "test.com", "test.org", "test.net",
+        "fake.com", "fake.org", "fake.net",
+        "domain.com", "email.com", "yoursite.com", "website.com",
+        "sentry.io", "w3.org", "schema.org", "googleapis.com",
+        "gstatic.com", "cloudflare.com", "localhost", "127.0.0.1",
+        "github.com", "github.io", "gitlab.com", "bitbucket.org",
+        "user.noreply.github.com", "notification@github.com",
+    }
+    if domain in FAKE_DOMAINS:
+        print(f"[filter] ✗ {email} - fake domain")
+        return True
+    
+    # Library/package names (ONLY if entire prefix matches)
+    LIBRARY_NAMES = {
+        "react", "redux", "angular", "vue", "node", "npm", "webpack",
+        "babel", "eslint", "prettier", "jest", "mocha", "chai",
+        "lodash", "axios", "express", "django", "flask", "spring",
+        "bootstrap", "tailwind", "material", "semantic", "bulma",
+        "jquery", "backbone", "ember", "svelte", "nextjs", "nuxt",
+        "typescript", "javascript", "python", "java", "golang",
+    }
+    if prefix in LIBRARY_NAMES:
+        print(f"[filter] ✗ {email} - library name")
+        return True
+    
+    # File extensions
+    if any(ext in prefix for ext in [".png", ".jpg", ".svg", ".gif", ".webp", ".pdf", ".mp4", ".mp3"]):
+        print(f"[filter] ✗ {email} - file extension")
+        return True
+    
+    # URLs masquerading as emails
+    if "://" in email or email.count("/") > 1:
+        print(f"[filter] ✗ {email} - URL pattern")
+        return True
+    
+    # Too short (less than 2 chars before @)
+    if len(prefix) < 2:
+        print(f"[filter] ✗ {email} - too short")
+        return True
+    
+    # Purely numeric
+    if prefix.isdigit() or domain.split(".")[0].isdigit():
+        print(f"[filter] ✗ {email} - numeric only")
+        return True
+    
+    # ===== KEEP EVERYTHING ELSE =====
+    # support@, info@, contact@, hello@, sales@, team@, business-email@, etc.
+    print(f"[filter] ✓ {email} - valid business email")
     return False
 
-def extract_emails_from_text(text):
-    found = re.findall(EMAIL_REGEX, text)
+
+# ============================================================================
+# EMAIL EXTRACTION - MULTIPLE METHODS
+# ============================================================================
+
+def extract_emails_from_text(text, source="text"):
+    """
+    Extract emails using multiple regex patterns.
+    Handles: standard emails, obfuscated formats, etc.
+    """
+    found = set()
     
-    if not found:
-        pattern1 = r'([a-zA-Z0-9._-]+)\s*(?:@|gmail)'
-        obf_found = re.findall(pattern1, text, re.IGNORECASE)
-        if obf_found:
-            for name in obf_found:
-                if len(name) > 2 and '@' not in name:
-                    found.append(f"{name}@gmail.com")
+    if not text or len(text) < 5:
+        return list(found)
     
-    clean = []
-    for e in found:
-        e = e.strip(".,;:\"'><)(][}{")
-        if "@" in e and "." in e.split("@")[1]:
-            if not is_fake_email(e):
-                clean.append(e.lower())
-    return list(set(clean))
-
-def extract_from_html(content):
-    emails = set()
-    try:
-        found = extract_emails_from_text(content)
-        emails.update(found)
-        soup = BeautifulSoup(content, "html.parser")
-        for tag in soup.find_all("a", href=True):
-            href = tag["href"]
-            if "mailto:" in href:
-                email = href.replace("mailto:", "").split("?")[0].strip()
-                if "@" in email and not is_fake_email(email):
-                    emails.add(email.lower())
-        for tag in soup.find_all(True):
-            for attr, val in tag.attrs.items():
-                if isinstance(val, str) and "@" in val:
-                    found = extract_emails_from_text(val)
-                    emails.update(found)
-        for tag in soup.find_all("script", type="application/ld+json"):
-            try:
-                found = extract_emails_from_text(tag.string or "")
-                emails.update(found)
-            except:
-                pass
-        for tag in soup.find_all("meta"):
-            content_val = tag.get("content", "")
-            if "@" in content_val:
-                found = extract_emails_from_text(content_val)
-                emails.update(found)
-        for tag in soup.find_all(["pre", "code"]):
-            found = extract_emails_from_text(tag.get_text())
-            emails.update(found)
-        for tag in soup.find_all(["span", "p", "div", "li", "td"]):
-            text = tag.get_text()
-            if "@" in text and len(text) < 200:
-                found = extract_emails_from_text(text)
-                emails.update(found)
-    except:
-        pass
-    return list(emails)
-
-def get_all_js_files(domain, html):
-    soup = BeautifulSoup(html, "html.parser")
-    js_files = []
-    seen = set()
-    for tag in soup.find_all("script", src=True):
-        src = tag["src"]
-        if src.startswith("//"):
-            src = "https:" + src
-        if src.startswith("http"):
-            if domain in src and src not in seen:
-                js_files.append(src)
-                seen.add(src)
-        else:
-            full = f"https://{domain}{src}" if src.startswith("/") else f"https://{domain}/{src}"
-            if full not in seen:
-                js_files.append(full)
-                seen.add(full)
-    return js_files
-
-def extract_from_js_files(domain, html):
-    emails = set()
-    js_files = get_all_js_files(domain, html)
-    print(f"  [js] found {len(js_files)} JS files to scan")
-    for js_url in js_files:
-        try:
-            r = requests.get(js_url, headers=HEADERS, timeout=10)
-            if r.status_code == 200:
-                found = extract_emails_from_text(r.text)
-                if found:
-                    print(f"  [js] {len(found)} emails in {js_url}")
-                    emails.update(found)
-        except:
-            pass
-    return list(emails)
-
-def fetch_public_sources(domain, emails_set):
-    """Fetch emails from fully public sources"""
-    session = requests.Session()
-    session.headers.update(HEADERS)
-    base = domain.split(".")[0]
-
-    # 1. crt.sh — SSL certificate transparency logs
-    try:
-        r = session.get(f"https://crt.sh/?q=%25.{domain}&output=json", timeout=12)
-        if r.status_code == 200:
-            data = r.json()
-            for entry in data[:200]:
-                name = entry.get("name_value", "")
-                found = extract_emails_from_text(name)
-                emails_set.update(found)
-            print(f"  [crt.sh] checked {len(data)} SSL certs")
-    except:
-        pass
-
-    # 2. Wayback Machine CDX API
-    try:
-        r = session.get(
-            f"http://web.archive.org/cdx/search/cdx?url={domain}/*&output=json&limit=30&fl=original",
-            timeout=12
-        )
-        if r.status_code == 200:
-            data = r.json()
-            for row in data[1:]:
-                found = extract_emails_from_text(row[0])
-                emails_set.update(found)
-            print(f"  [wayback] checked {len(data)} archive URLs")
-    except:
-        pass
-
-    # 3. Hunter.io free domain search (no key needed for basic)
-    try:
-        r = session.get(
-            f"https://api.hunter.io/v2/domain-search?domain={domain}&limit=100",
-            timeout=10
-        )
-        if r.status_code == 200:
-            data = r.json()
-            for e in data.get("data", {}).get("emails", []):
-                email = e.get("value", "")
-                if email and "@" in email:
-                    emails_set.add(email.lower())
-                    print(f"  [hunter] {email}")
-    except:
-        pass
-
-    # 4. GitHub public search
-    try:
-        r = session.get(
-            f"https://api.github.com/search/code?q={domain}+email&per_page=10",
-            headers={**HEADERS, "Accept": "application/vnd.github.v3+json"},
-            timeout=10
-        )
-        if r.status_code == 200:
-            data = r.json()
-            for item in data.get("items", []):
-                found = extract_emails_from_text(
-                    item.get("name", "") + " " + item.get("path", "")
-                )
-                emails_set.update(found)
-            print(f"  [github] checked public repos")
-    except:
-        pass
-
-    # 5. CommonCrawl index
-    try:
-        r = session.get(
-            f"http://index.commoncrawl.org/CC-MAIN-2024-10-index?url=*.{domain}&output=json&limit=20",
-            timeout=12
-        )
-        if r.status_code == 200:
-            for line in r.text.strip().split("\n")[:20]:
-                try:
-                    item = json.loads(line)
-                    found = extract_emails_from_text(item.get("url", ""))
-                    emails_set.update(found)
-                except:
-                    pass
-            print(f"  [commoncrawl] checked index")
-    except:
-        pass
-
-def fetch_extra_sources(domain):
-    """Fetch emails from standard web paths"""
-    emails = set()
-    session = requests.Session()
-    session.headers.update(HEADERS)
-
-    extra_urls = [
-        # Security & Disclosure
-        f"https://{domain}/security.txt",
-        f"https://{domain}/.well-known/security.txt",
-        f"https://{domain}/security",
-        f"https://{domain}/security-policy",
-        f"https://{domain}/security/disclosure",
-        f"https://{domain}/security/contact",
-        f"https://{domain}/security/reporting",
-        f"https://{domain}/security/vulnerabilities",
-        f"https://{domain}/security/advisories",
-        f"https://{domain}/security/pgp",
-        f"https://{domain}/security/pgp-key",
-        f"https://{domain}/security/pgp-key.txt",
-        f"https://{domain}/security/gpg-key",
-        f"https://{domain}/security/gpg-key.txt",
-        f"https://{domain}/security/hall-of-fame",
-        f"https://{domain}/security/acknowledgements",
-        f"https://{domain}/security/thanks",
-        f"https://{domain}/security/bug-bounty",
-        f"https://{domain}/security/responsible-disclosure",
-        f"https://{domain}/security/report",
-        f"https://{domain}/security/report-a-bug",
-        f"https://{domain}/security/report-vulnerability",
-        f"https://{domain}/responsible-disclosure",
-        f"https://{domain}/responsible_disclosure",
-        f"https://{domain}/vulnerability-disclosure",
-        f"https://{domain}/vulnerability-disclosure-policy",
-        f"https://{domain}/coordinated-disclosure",
-        f"https://{domain}/bug-bounty",
-        f"https://{domain}/bugbounty",
-        f"https://{domain}/bug_bounty",
-        f"https://{domain}/bounty",
-        f"https://{domain}/bounty-program",
-        f"https://{domain}/vdp",
-        f"https://{domain}/bbp",
-        f"https://{domain}/cvd",
-        f"https://{domain}/psirt",
-        f"https://{domain}/cert",
-        f"https://{domain}/csirt",
-        f"https://{domain}/pentest",
-        f"https://{domain}/hall-of-fame",
-        f"https://{domain}/halloffame",
-        f"https://{domain}/hof",
-        f"https://{domain}/acknowledgements",
-        f"https://{domain}/acknowledgments",
-        f"https://{domain}/thanks",
-        f"https://{domain}/thank-you",
-        f"https://{domain}/researchers",
-        f"https://{domain}/report",
-        f"https://{domain}/report-bug",
-        f"https://{domain}/report-a-bug",
-        f"https://{domain}/report-vulnerability",
-        f"https://{domain}/report-issue",
-        f"https://{domain}/disclose",
-        f"https://{domain}/disclosure",
-        f"https://{domain}/advisories",
-        f"https://{domain}/security-advisories",
-        f"https://{domain}/cve",
-        f"https://{domain}/cves",
-        f"https://{domain}/patches",
-        f"https://{domain}/patch-notes",
-        f"https://{domain}/pgp",
-        f"https://{domain}/pgp-key",
-        f"https://{domain}/pgp-key.txt",
-        f"https://{domain}/gpg",
-        f"https://{domain}/gpg-key",
-        f"https://{domain}/gpg-key.txt",
-        f"https://{domain}/publickey",
-        f"https://{domain}/public-key",
-        f"https://{domain}/keys",
-        f"https://{domain}/.well-known/pgp-key.txt",
-        f"https://{domain}/.well-known/gpg-key.txt",
-        f"https://{domain}/.well-known/security-contact",
-        f"https://{domain}/.well-known/csaf",
-
-        # Contact
-        f"https://{domain}/contact",
-        f"https://{domain}/contact-us",
-        f"https://{domain}/contactus",
-        f"https://{domain}/contact_us",
-        f"https://{domain}/contact.html",
-        f"https://{domain}/contact.php",
-        f"https://{domain}/contact.json",
-        f"https://{domain}/contact.xml",
-        f"https://{domain}/contacts",
-        f"https://{domain}/get-in-touch",
-        f"https://{domain}/getintouch",
-        f"https://{domain}/get_in_touch",
-        f"https://{domain}/reach",
-        f"https://{domain}/reach-us",
-        f"https://{domain}/reach_us",
-        f"https://{domain}/reachout",
-        f"https://{domain}/reach-out",
-        f"https://{domain}/talk-to-us",
-        f"https://{domain}/talktous",
-        f"https://{domain}/talk_to_us",
-        f"https://{domain}/say-hello",
-        f"https://{domain}/sayhello",
-        f"https://{domain}/hello",
-        f"https://{domain}/connect",
-        f"https://{domain}/connect-with-us",
-        f"https://{domain}/connectwithus",
-        f"https://{domain}/enquiry",
-        f"https://{domain}/enquiries",
-        f"https://{domain}/inquiry",
-        f"https://{domain}/inquiries",
-        f"https://{domain}/email",
-        f"https://{domain}/email-us",
-        f"https://{domain}/emailus",
-        f"https://{domain}/mail",
-        f"https://{domain}/mail-us",
-        f"https://{domain}/message",
-        f"https://{domain}/messages",
-        f"https://{domain}/message-us",
-        f"https://{domain}/write-to-us",
-        f"https://{domain}/write-us",
-        f"https://{domain}/writeus",
-        f"https://{domain}/ping",
-        f"https://{domain}/drop-us-a-line",
-        f"https://{domain}/drop-a-line",
-        f"https://{domain}/lets-talk",
-        f"https://{domain}/letstalk",
-        f"https://{domain}/get-help",
-        f"https://{domain}/gethelp",
-        f"https://{domain}/ask",
-        f"https://{domain}/feedback",
-        f"https://{domain}/feedbacks",
-        f"https://{domain}/suggestions",
-        f"https://{domain}/hire-us",
-        f"https://{domain}/hireus",
-        f"https://{domain}/work-with-us",
-        f"https://{domain}/workwithus",
-        f"https://{domain}/partner-with-us",
-        f"https://{domain}/partnerwithus",
-        f"https://{domain}/info",
-        f"https://{domain}/information",
-        f"https://{domain}/general-enquiry",
-        f"https://{domain}/general-inquiry",
-        f"https://{domain}/speak-to-us",
-        f"https://{domain}/chat-with-us",
-        f"https://{domain}/start-a-conversation",
-        f"https://{domain}/send-message",
-        f"https://{domain}/send-email",
-        f"https://{domain}/offices",
-        f"https://{domain}/office",
-        f"https://{domain}/locations",
-        f"https://{domain}/location",
-        f"https://{domain}/headquarters",
-        f"https://{domain}/hq",
-        f"https://{domain}/directions",
-        f"https://{domain}/map",
-
-        # About
-        f"https://{domain}/about",
-        f"https://{domain}/about-us",
-        f"https://{domain}/aboutus",
-        f"https://{domain}/about_us",
-        f"https://{domain}/about.html",
-        f"https://{domain}/our-story",
-        f"https://{domain}/ourstory",
-        f"https://{domain}/our_story",
-        f"https://{domain}/who-we-are",
-        f"https://{domain}/whoweare",
-        f"https://{domain}/mission",
-        f"https://{domain}/our-mission",
-        f"https://{domain}/vision",
-        f"https://{domain}/values",
-        f"https://{domain}/overview",
-        f"https://{domain}/introduction",
-        f"https://{domain}/history",
-        f"https://{domain}/background",
-        f"https://{domain}/profile",
-        f"https://{domain}/manifesto",
-        f"https://{domain}/philosophy",
-        f"https://{domain}/culture",
-        f"https://{domain}/company",
-        f"https://{domain}/company/about",
-        f"https://{domain}/company/contact",
-        f"https://{domain}/company/team",
-        f"https://{domain}/company/security",
-        f"https://{domain}/corporate",
-        f"https://{domain}/organization",
-        f"https://{domain}/organisation",
-        f"https://{domain}/imprint",
-        f"https://{domain}/impressum",
-
-        # Team
-        f"https://{domain}/team",
-        f"https://{domain}/our-team",
-        f"https://{domain}/ourteam",
-        f"https://{domain}/people",
-        f"https://{domain}/staff",
-        f"https://{domain}/crew",
-        f"https://{domain}/founders",
-        f"https://{domain}/founder",
-        f"https://{domain}/co-founders",
-        f"https://{domain}/cofounders",
-        f"https://{domain}/leadership",
-        f"https://{domain}/leaders",
-        f"https://{domain}/management",
-        f"https://{domain}/executives",
-        f"https://{domain}/executive-team",
-        f"https://{domain}/board",
-        f"https://{domain}/board-of-directors",
-        f"https://{domain}/directors",
-        f"https://{domain}/advisors",
-        f"https://{domain}/advisory-board",
-        f"https://{domain}/officers",
-        f"https://{domain}/c-suite",
-        f"https://{domain}/employees",
-        f"https://{domain}/members",
-        f"https://{domain}/meet-the-team",
-        f"https://{domain}/meet-us",
-        f"https://{domain}/our-people",
-        f"https://{domain}/contributors",
-
-        # Support & Help
-        f"https://{domain}/support",
-        f"https://{domain}/help",
-        f"https://{domain}/faq",
-        f"https://{domain}/faqs",
-        f"https://{domain}/helpdesk",
-        f"https://{domain}/help-desk",
-        f"https://{domain}/help-center",
-        f"https://{domain}/helpcenter",
-        f"https://{domain}/helpcentre",
-        f"https://{domain}/customer-service",
-        f"https://{domain}/customerservice",
-        f"https://{domain}/customer-support",
-        f"https://{domain}/customersupport",
-        f"https://{domain}/customer-care",
-        f"https://{domain}/tickets",
-        f"https://{domain}/open-ticket",
-        f"https://{domain}/new-ticket",
-        f"https://{domain}/submit-ticket",
-        f"https://{domain}/knowledge-base",
-        f"https://{domain}/knowledgebase",
-        f"https://{domain}/kb",
-        f"https://{domain}/documentation",
-        f"https://{domain}/docs",
-        f"https://{domain}/wiki",
-        f"https://{domain}/guides",
-        f"https://{domain}/tutorials",
-        f"https://{domain}/resources",
-        f"https://{domain}/forum",
-        f"https://{domain}/forums",
-        f"https://{domain}/community",
-        f"https://{domain}/chat",
-        f"https://{domain}/live-chat",
-
-        # Legal & Privacy
-        f"https://{domain}/legal",
-        f"https://{domain}/privacy",
-        f"https://{domain}/terms",
-        f"https://{domain}/policy",
-        f"https://{domain}/compliance",
-        f"https://{domain}/gdpr",
-        f"https://{domain}/cookies",
-        f"https://{domain}/disclaimer",
-        f"https://{domain}/tos",
-        f"https://{domain}/terms-of-service",
-        f"https://{domain}/terms-of-use",
-        f"https://{domain}/privacy-policy",
-        f"https://{domain}/cookie-policy",
-        f"https://{domain}/data-protection",
-        f"https://{domain}/dpa",
-        f"https://{domain}/aup",
-        f"https://{domain}/acceptable-use",
-        f"https://{domain}/dmca",
-        f"https://{domain}/copyright",
-        f"https://{domain}/ccpa",
-        f"https://{domain}/dpo",
-
-        # Press & Media
-        f"https://{domain}/press",
-        f"https://{domain}/media",
-        f"https://{domain}/newsroom",
-        f"https://{domain}/news",
-        f"https://{domain}/press-kit",
-        f"https://{domain}/presskit",
-        f"https://{domain}/press-releases",
-        f"https://{domain}/press-room",
-        f"https://{domain}/pressroom",
-        f"https://{domain}/media-kit",
-        f"https://{domain}/mediakit",
-        f"https://{domain}/media-contact",
-        f"https://{domain}/journalists",
-        f"https://{domain}/editorial",
-        f"https://{domain}/brand",
-        f"https://{domain}/brand-assets",
-        f"https://{domain}/logo",
-        f"https://{domain}/logos",
-        f"https://{domain}/assets",
-        f"https://{domain}/pr",
-        f"https://{domain}/communications",
-
-        # Careers & Jobs
-        f"https://{domain}/careers",
-        f"https://{domain}/jobs",
-        f"https://{domain}/hiring",
-        f"https://{domain}/work-with-us",
-        f"https://{domain}/join-us",
-        f"https://{domain}/join",
-        f"https://{domain}/join-our-team",
-        f"https://{domain}/openings",
-        f"https://{domain}/open-positions",
-        f"https://{domain}/vacancies",
-        f"https://{domain}/positions",
-        f"https://{domain}/recruitment",
-        f"https://{domain}/apply",
-        f"https://{domain}/internships",
-        f"https://{domain}/internship",
-        f"https://{domain}/graduate",
-        f"https://{domain}/opportunities",
-        f"https://{domain}/we-are-hiring",
-        f"https://{domain}/work-here",
-
-        # Developer & API
-        f"https://{domain}/api",
-        f"https://{domain}/api/contact",
-        f"https://{domain}/api/info",
-        f"https://{domain}/api/v1/contact",
-        f"https://{domain}/api/v2/contact",
-        f"https://{domain}/api/v1/info",
-        f"https://{domain}/api/v2/info",
-        f"https://{domain}/api/about",
-        f"https://{domain}/api/team",
-        f"https://{domain}/api/security",
-        f"https://{domain}/api/users",
-        f"https://{domain}/api/profile",
-        f"https://{domain}/api/company",
-        f"https://{domain}/developer",
-        f"https://{domain}/developers",
-        f"https://{domain}/dev",
-        f"https://{domain}/open-source",
-        f"https://{domain}/opensource",
-        f"https://{domain}/contributing",
-        f"https://{domain}/contribute",
-        f"https://{domain}/github",
-        f"https://{domain}/openapi.json",
-        f"https://{domain}/swagger.json",
-        f"https://{domain}/api-docs",
-        f"https://{domain}/api/docs",
-        f"https://{domain}/graphql",
-        f"https://{domain}/v1",
-        f"https://{domain}/v2",
-        f"https://{domain}/v3",
-
-        # Technical files
-        f"https://{domain}/robots.txt",
-        f"https://{domain}/humans.txt",
-        f"https://{domain}/sitemap.xml",
-        f"https://{domain}/sitemap_index.xml",
-        f"https://{domain}/sitemap-index.xml",
-        f"https://{domain}/sitemaps.xml",
-        f"https://{domain}/feed.xml",
-        f"https://{domain}/feed",
-        f"https://{domain}/rss",
-        f"https://{domain}/rss.xml",
-        f"https://{domain}/atom.xml",
-        f"https://{domain}/manifest.json",
-        f"https://{domain}/app.json",
-        f"https://{domain}/package.json",
-        f"https://{domain}/composer.json",
-        f"https://{domain}/info.json",
-        f"https://{domain}/config.json",
-        f"https://{domain}/settings.json",
-        f"https://{domain}/data.json",
-        f"https://{domain}/team.json",
-        f"https://{domain}/authors.json",
-        f"https://{domain}/CHANGELOG.md",
-        f"https://{domain}/CHANGELOG",
-        f"https://{domain}/AUTHORS",
-        f"https://{domain}/AUTHORS.md",
-        f"https://{domain}/CONTRIBUTING.md",
-        f"https://{domain}/CONTRIBUTING",
-        f"https://{domain}/README.md",
-        f"https://{domain}/README",
-        f"https://{domain}/LICENSE",
-        f"https://{domain}/LICENSE.md",
-        f"https://{domain}/SECURITY.md",
-        f"https://{domain}/SECURITY",
-        f"https://{domain}/CODE_OF_CONDUCT.md",
-        f"https://{domain}/.well-known/security.txt",
-        f"https://{domain}/.well-known/pgp-key.txt",
-        f"https://{domain}/.well-known/gpg-key.txt",
-        f"https://{domain}/.well-known/change-password",
-        f"https://{domain}/.well-known/openid-configuration",
-        f"https://www.{domain}/security.txt",
-        f"https://www.{domain}/.well-known/security.txt",
-        f"https://www.{domain}/contact",
-        f"https://www.{domain}/about",
-
-        # Blog & Content
-        f"https://{domain}/blog",
-        f"https://{domain}/blog/contact",
-        f"https://{domain}/blog/about",
-        f"https://{domain}/blog/team",
-        f"https://{domain}/updates",
-        f"https://{domain}/changelog",
-        f"https://{domain}/release-notes",
-        f"https://{domain}/announcements",
-        f"https://{domain}/events",
-        f"https://{domain}/webinars",
-        f"https://{domain}/podcast",
-        f"https://{domain}/videos",
-        f"https://{domain}/newsletter",
-        f"https://{domain}/subscribe",
-
-        # Company & Investors
-        f"https://{domain}/investors",
-        f"https://{domain}/investor-relations",
-        f"https://{domain}/investorrelations",
-        f"https://{domain}/ir",
-        f"https://{domain}/partners",
-        f"https://{domain}/partnerships",
-        f"https://{domain}/partner",
-        f"https://{domain}/affiliates",
-        f"https://{domain}/affiliate",
-        f"https://{domain}/resellers",
-        f"https://{domain}/vendors",
-        f"https://{domain}/suppliers",
-        f"https://{domain}/customers",
-        f"https://{domain}/clients",
-        f"https://{domain}/case-studies",
-        f"https://{domain}/testimonials",
-        f"https://{domain}/trust",
-        f"https://{domain}/trust-center",
-        f"https://{domain}/trustcenter",
-        f"https://{domain}/status",
-        f"https://{domain}/statuspage",
-        f"https://{domain}/social",
-        f"https://{domain}/referral",
-        f"https://{domain}/ambassador",
-        f"https://{domain}/accessibility",
-
-        # Common subpaths with contact info
-        f"https://{domain}/en/contact",
-        f"https://{domain}/en/about",
-        f"https://{domain}/en/security",
-        f"https://{domain}/en/team",
-        f"https://{domain}/en/support",
-        f"https://{domain}/en-us/contact",
-        f"https://{domain}/en-gb/contact",
-        f"https://{domain}/us/contact",
-        f"https://{domain}/uk/contact",
-        f"https://{domain}/global/contact",
-        f"https://{domain}/int/contact",
-        f"https://{domain}/de/contact",
-        f"https://{domain}/fr/contact",
-        f"https://{domain}/es/contact",
-        f"https://{domain}/pages/contact",
-        f"https://{domain}/pages/about",
-        f"https://{domain}/pages/team",
-        f"https://{domain}/pages/security",
-        f"https://{domain}/pages/legal",
-        f"https://{domain}/page/contact",
-        f"https://{domain}/page/about",
-        f"https://{domain}/info/contact",
-        f"https://{domain}/info/about",
-        f"https://{domain}/site/contact",
-        f"https://{domain}/site/about",
-        f"https://{domain}/web/contact",
-        f"https://{domain}/home/contact",
-        f"https://{domain}/main/contact",
-        f"https://{domain}/public/contact",
-        f"https://{domain}/static/contact",
-
-        # Common subdomains as URLs
-        f"https://security.{domain}",
-        f"https://contact.{domain}",
-        f"https://support.{domain}",
-        f"https://help.{domain}",
-        f"https://about.{domain}",
-        f"https://team.{domain}",
-        f"https://press.{domain}",
-        f"https://media.{domain}",
-        f"https://blog.{domain}",
-        f"https://careers.{domain}",
-        f"https://jobs.{domain}",
-        f"https://legal.{domain}",
-        f"https://privacy.{domain}",
-        f"https://trust.{domain}",
-        f"https://status.{domain}",
-        f"https://api.{domain}/contact",
-        f"https://api.{domain}/info",
-        f"https://api.{domain}/about",
-        f"https://developer.{domain}",
-        f"https://developers.{domain}",
-        f"https://dev.{domain}",
-        f"https://docs.{domain}",
-        f"https://wiki.{domain}",
-        f"https://community.{domain}",
-        f"https://forum.{domain}",
-        f"https://news.{domain}",
-        f"https://info.{domain}",
-        f"https://mail.{domain}",
-        f"https://www.{domain}/security",
-        f"https://www.{domain}/privacy",
-        f"https://www.{domain}/legal",
-        f"https://www.{domain}/team",
-        f"https://www.{domain}/press",
-        f"https://www.{domain}/careers",
-        f"https://www.{domain}/support",
-        f"https://www.{domain}/help",
-        f"https://www.{domain}/blog",
-        f"https://www.{domain}/investors",
-        f"https://www.{domain}/about",
-        f"https://www.{domain}/about-us",
-    ]
-
-    import concurrent.futures
-
-    def fetch_one(url):
-        try:
-            r = session.get(url, timeout=4, verify=False)
-            if r.status_code == 200:
-                found = extract_emails_from_text(r.text)
-                if found:
-                    print(f"  [extra] {len(found)} emails from {url}")
-                    return found
-        except:
-            pass
-        return []
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as ex:
-        for result in ex.map(fetch_one, extra_urls):
-            emails.update(result)
-
-    return list(emails)
-
-def guess_emails(domain):
-    HOSTING_PLATFORMS = ["vercel.app", "netlify.app", "github.io", "herokuapp.com", "pages.dev", "web.app"]
-    for platform in HOSTING_PLATFORMS:
-        if domain.endswith(platform):
-            return []  # skip guessing for hosting platforms
-    parts = domain.split(".")
-    if len(parts) > 2:
-        root = ".".join(parts[-2:])
-    else:
-        root = domain
-    return [f"{prefix}@{root}" for prefix in EMAIL_PREFIXES]
-
-def extract_all(domain, pages_data):
-    all_emails = set()
-    print(f"[extract_all] Called with {len(pages_data)} pages")
+    print(f"[extract-{source}] Scanning {len(text)} chars")
     
-    for page in pages_data:
-        url = page["url"]
-        content = page["content"]
-        print(f"[extract_all] Processing {url}, content: {len(content)} bytes")
-        
-        found = extract_from_html(content)
-        print(f"[extract_all] Found {len(found)} emails from HTML: {found}")
-        all_emails.update(found)
-        
-        js_emails = extract_from_js_files(domain, content)
-        print(f"[extract_all] Found {len(js_emails)} emails from JS: {js_emails}")
-        all_emails.update(js_emails)
+    # 1. Primary regex (standard emails)
+    primary = re.findall(EMAIL_PATTERNS["primary"], text)
+    if primary:
+        print(f"[extract-{source}] Primary regex: {len(primary)} found")
+        found.update(primary)
     
-    print(f"[extract_all] TOTAL: {len(all_emails)} emails found")
-    return list(all_emails)
-    all_emails = set()
-    print(f"[extract_all] Called with {len(pages_data)} pages")
-    print(f"[extract_all] pages_data type: {type(pages_data)}")
+    # 2. Obfuscated "name at domain" format
+    obf_at = re.findall(EMAIL_PATTERNS["obfuscated_at"], text, re.IGNORECASE)
+    if obf_at:
+        print(f"[extract-{source}] Obfuscated 'at': {len(obf_at)} found")
+        for name, domain in obf_at:
+            found.add(f"{name}@{domain}")
     
-    if not pages_data:
-        print(f"[extract_all] ERROR: pages_data is empty!")
-        return []
+    # 3. Obfuscated with brackets [at]
+    obf_bracket = re.findall(EMAIL_PATTERNS["obfuscated_bracket"], text, re.IGNORECASE)
+    if obf_bracket:
+        print(f"[extract-{source}] Obfuscated [at]: {len(obf_bracket)} found")
+        for name, domain in obf_bracket:
+            found.add(f"{name}@{domain}")
     
-    for i, page in enumerate(pages_data):
-        print(f"[extract_all] Page {i}: {page}")
-        print(f"[extract_all] Page keys: {page.keys() if isinstance(page, dict) else 'NOT A DICT'}")
+    # 4. Obfuscated with parentheses (at)
+    obf_space = re.findall(EMAIL_PATTERNS["obfuscated_space"], text, re.IGNORECASE)
+    if obf_space:
+        print(f"[extract-{source}] Obfuscated (at): {len(obf_space)} found")
+        for name, domain in obf_space:
+            found.add(f"{name}@{domain}")
+    
+    # Clean and normalize
+    clean = set()
+    for email in found:
+        email = email.strip(".,;:\"'><)([]{}`|\\")
         
-        url = page.get("url", "NO_URL")
-        content = page.get("content", None)
-        
-        print(f"[extract_all] URL: {url}")
-        print(f"[extract_all] Content type: {type(content)}, is None: {content is None}")
-        
-        if content:
-            print(f"[extract_all] Content length: {len(content)}")
-            print(f"[extract_all] First 300 chars: {content[:300]}")
-        
-        if not content:
-            print(f"[extract_all] SKIPPING - content is empty/None")
+        # Validate format
+        if "@" not in email or email.count("@") > 1:
             continue
         
-        print(f"[extract_all] Calling extract_from_html...")
-        found = extract_from_html(content)
-        print(f"[extract_all] extract_from_html returned {len(found)} emails: {found}")
+        parts = email.split("@")
+        if len(parts) != 2:
+            continue
         
-        all_emails.update(found)
+        prefix, domain = parts
         
-        js_emails = extract_from_js_files(domain, content)
-        print(f"[extract_all] extract_from_js_files returned {len(js_emails)} emails")
-        all_emails.update(js_emails)
+        # Validate parts
+        if len(prefix) < 2 or len(domain) < 5:
+            continue
+        
+        if "." not in domain:
+            continue
+        
+        # Normalize case
+        email = email.lower()
+        clean.add(email)
+    
+    print(f"[extract-{source}] After cleanup: {len(clean)} valid emails")
+    return list(clean)
 
-    print(f"  [FINAL] {len(all_emails)} total emails found: {list(all_emails)}")
+
+def extract_mailto_links(html):
+    """
+    Extract emails from mailto: links in HTML.
+    These are HIGH confidence (directly linked contact info).
+    """
+    emails = set()
+    
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        
+        # Find all <a> tags with mailto:
+        mailto_links = soup.find_all("a", href=re.compile(r'^mailto:', re.IGNORECASE))
+        
+        print(f"[mailto] Found {len(mailto_links)} mailto links")
+        
+        for link in mailto_links:
+            href = link.get("href", "").lower()
+            
+            # Extract email from mailto:email@domain.com?subject=...
+            email_match = re.search(r'mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})', href)
+            
+            if email_match:
+                email = email_match.group(1).lower().strip()
+                
+                if not is_fake_email(email):
+                    emails.add(email)
+                    print(f"[mailto] ✓ {email}")
+    
+    except Exception as e:
+        print(f"[mailto] Error: {e}")
+    
+    return list(emails)
+
+
+def extract_from_html(content):
+    """
+    Extract emails from HTML content using multiple methods:
+    1. Mailto links (highest confidence)
+    2. Raw text extraction
+    3. Meta tags and attributes
+    4. JSON-LD structured data
+    5. HTML comments
+    """
+    all_emails = set()
+    
+    print(f"\n{'='*70}")
+    print(f"[HTML] === HTML EXTRACTION PIPELINE ===")
+    print(f"[HTML] Content size: {len(content)} bytes")
+    print(f"{'='*70}")
+    
+    try:
+        # 1. MAILTO LINKS (highest confidence)
+        print(f"\n[HTML] Step 1: Extracting mailto: links...")
+        mailto_emails = extract_mailto_links(content)
+        print(f"[HTML] Mailto found: {len(mailto_emails)}")
+        all_emails.update(mailto_emails)
+        
+        # 2. TEXT EXTRACTION
+        print(f"\n[HTML] Step 2: Extracting from text content...")
+        text_emails = extract_emails_from_text(content, source="html-text")
+        print(f"[HTML] Text found: {len(text_emails)}")
+        all_emails.update(text_emails)
+        
+        # 3. SOUP PARSING (attributes, meta tags, etc.)
+        print(f"\n[HTML] Step 3: Parsing HTML structure...")
+        soup = BeautifulSoup(content, "html.parser")
+        
+        # Meta tags
+        for meta in soup.find_all("meta"):
+            content_val = meta.get("content", "")
+            name_val = meta.get("name", "")
+            
+            if content_val and "@" in content_val:
+                found = extract_emails_from_text(content_val, source="html-meta")
+                all_emails.update(found)
+        
+        # All tag attributes
+        for tag in soup.find_all(True):
+            for attr, val in tag.attrs.items():
+                if isinstance(val, str) and "@" in val and len(val) < 200:
+                    found = extract_emails_from_text(val, source="html-attr")
+                    all_emails.update(found)
+        
+        # 4. JSON-LD STRUCTURED DATA
+        print(f"\n[HTML] Step 4: Scanning JSON-LD scripts...")
+        json_ld_scripts = soup.find_all("script", type="application/ld+json")
+        print(f"[HTML] Found {len(json_ld_scripts)} JSON-LD scripts")
+        
+        for script in json_ld_scripts:
+            if script.string:
+                try:
+                    json_data = json.loads(script.string)
+                    json_str = json.dumps(json_data)
+                    found = extract_emails_from_text(json_str, source="html-jsonld")
+                    all_emails.update(found)
+                except:
+                    pass
+        
+        # 5. HTML COMMENTS
+        print(f"\n[HTML] Step 5: Scanning HTML comments...")
+        for comment in soup.find_all(string=lambda text: isinstance(text, str)):
+            if isinstance(comment, str) and "@" in comment and len(comment) < 300:
+                found = extract_emails_from_text(comment, source="html-comment")
+                all_emails.update(found)
+    
+    except Exception as e:
+        print(f"[HTML] Error during parsing: {e}")
+    
+    # Final filtering
+    clean_emails = [e for e in all_emails if not is_fake_email(e)]
+    
+    print(f"\n[HTML] === SUMMARY ===")
+    print(f"[HTML] Found: {len(all_emails)} emails")
+    print(f"[HTML] Filtered: {len(all_emails) - len(clean_emails)} fakes")
+    print(f"[HTML] Result: {len(clean_emails)} real emails")
+    print(f"{'='*70}\n")
+    
+    return clean_emails
+
+
+def extract_from_js_files(domain, html):
+    """
+    Extract JavaScript files and scan for emails.
+    
+    STRATEGY:
+    1. Find all <script> tags (inline + external URLs)
+    2. Scan inline scripts first (critical)
+    3. Extract external JS URLs
+    4. Deduplicate
+    5. Prioritize: _next/static, bundles, app files
+    6. Skip huge vendors (>2MB)
+    7. Scan ALL files (no limit)
+    """
+    all_emails = set()
+    
+    print(f"\n{'='*70}")
+    print(f"[JS] === JAVASCRIPT EXTRACTION PIPELINE ===")
+    print(f"{'='*70}")
+    
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        scripts = soup.find_all("script")
+        
+        print(f"\n[JS] Found {len(scripts)} script tags")
+        
+        # ===== STEP 1: INLINE SCRIPTS =====
+        print(f"\n[JS] Step 1: Scanning inline scripts...")
+        inline_count = 0
+        
+        for i, script in enumerate(scripts):
+            if script.string:
+                text = script.string
+                if len(text) > 50:  # Skip tiny scripts
+                    inline_count += 1
+                    print(f"[JS-inline] Script #{i}: {len(text)} bytes")
+                    
+                    found = extract_emails_from_text(text, source="js-inline")
+                    if found:
+                        print(f"[JS-inline] ✓ Found: {found}")
+                        all_emails.update(found)
+        
+        print(f"[JS] Scanned {inline_count} inline scripts")
+        
+        # ===== STEP 2: EXTERNAL JS FILES =====
+        print(f"\n[JS] Step 2: Extracting external JS URLs...")
+        js_urls = set()
+        
+        for script in scripts:
+            src = script.get("src")
+            if not src:
+                continue
+            
+            # Normalize URL
+            if src.startswith("//"):
+                src = "https:" + src
+            elif src.startswith("http"):
+                pass
+            elif src.startswith("/"):
+                src = f"https://{domain}{src}"
+            else:
+                src = f"https://{domain}/{src}"
+            
+            # Deduplicate
+            js_urls.add(src)
+        
+        print(f"[JS] Found {len(js_urls)} unique external JS URLs")
+        
+        # ===== STEP 3: PRIORITIZE URLs =====
+        print(f"\n[JS] Step 3: Prioritizing URLs...")
+        
+        def priority_score(url):
+            """Score URLs for scanning priority"""
+            score = 0
+            url_lower = url.lower()
+            
+            # HIGHEST: Next.js chunks
+            if "_next/static" in url_lower or "/_next/" in url_lower:
+                score += 100000
+                print(f"[JS-priority] ★★★ {url.split('/')[-1]} (Next.js)")
+            
+            # HIGH: app/main/bundle files
+            elif any(x in url_lower for x in ["app.", "main.", "bundle.", "index."]):
+                score += 10000
+                print(f"[JS-priority] ★★ {url.split('/')[-1]} (bundle)")
+            
+            # MEDIUM: not vendors
+            elif "vendor" not in url_lower and "libs" not in url_lower:
+                score += 1000
+                print(f"[JS-priority] ★ {url.split('/')[-1]} (normal)")
+            
+            # LOW: vendors
+            else:
+                score -= 1000
+                print(f"[JS-priority] ○ {url.split('/')[-1]} (vendor)")
+            
+            return score
+        
+        js_list = sorted(list(js_urls), key=priority_score, reverse=True)
+        
+        # ===== STEP 4: SCAN ALL FILES =====
+        print(f"\n[JS] Step 4: Scanning all JavaScript files...")
+        scanned = 0
+        skipped = 0
+        
+        for js_url in js_list:
+            try:
+                filename = js_url.split('/')[-1]
+                print(f"\n[JS-fetch] Fetching: {filename}...")
+                
+                r = requests.get(js_url, headers=HEADERS, timeout=10, verify=False)
+                
+                if r.status_code != 200:
+                    print(f"[JS-fetch] ✗ HTTP {r.status_code}")
+                    continue
+                
+                js_text = r.text
+                js_size = len(js_text)
+                
+                # Skip huge files (>2MB likely unimportant vendors)
+                if js_size > 2000000:
+                    print(f"[JS-fetch] ⊘ Skipped (too large: {js_size} bytes)")
+                    skipped += 1
+                    continue
+                
+                scanned += 1
+                print(f"[JS-fetch] ✓ Scanning {js_size} bytes")
+                
+                found = extract_emails_from_text(js_text, source=f"js-file:{filename}")
+                
+                if found:
+                    print(f"[JS-fetch] ✓✓ Found {len(found)}: {found}")
+                    all_emails.update(found)
+                else:
+                    print(f"[JS-fetch] No emails found")
+            
+            except requests.Timeout:
+                print(f"[JS-fetch] ✗ Timeout")
+            except Exception as e:
+                print(f"[JS-fetch] ✗ Error: {str(e)[:100]}")
+        
+        print(f"\n[JS] === SUMMARY ===")
+        print(f"[JS] Scanned: {scanned} files")
+        print(f"[JS] Skipped: {skipped} files (too large)")
+        print(f"[JS] Emails found: {len(all_emails)}")
+        print(f"{'='*70}\n")
+    
+    except Exception as e:
+        print(f"[JS] Fatal error: {e}")
+    
     return list(all_emails)
+
+
+# ============================================================================
+# MAIN EXTRACTION PIPELINE
+# ============================================================================
+
+def extract_all(domain, pages_data):
+    """
+    Complete production-grade email extraction pipeline.
+    
+    For each page:
+    1. Extract from HTML (mailto, text, meta, JSON-LD, comments)
+    2. Extract from JavaScript (inline + external files)
+    3. Merge results
+    4. Filter fakes
+    5. Return real emails
+    """
+    all_emails = set()
+    
+    print(f"\n\n")
+    print(f"╔{'═'*68}╗")
+    print(f"║ {'EMAIL EXTRACTION PIPELINE - PRODUCTION GRADE':^66} ║")
+    print(f"╚{'═'*68}╝")
+    print(f"\nDomain: {domain}")
+    print(f"Pages to scan: {len(pages_data)}")
+    print(f"\n{'='*70}\n")
+    
+    # Process each page
+    for page_num, page in enumerate(pages_data, 1):
+        url = page.get("url", "unknown")
+        content = page.get("content", "")
+        
+        print(f"\n┌─ PAGE {page_num}/{len(pages_data)} ─────────────────────────────────────┐")
+        print(f"│ URL: {url[:60]}")
+        print(f"│ Size: {len(content)} bytes")
+        print(f"└──────────────────────────────────────────────────────────────┘\n")
+        
+        # HTML extraction
+        html_emails = extract_from_html(content)
+        all_emails.update(html_emails)
+        
+        # JavaScript extraction
+        js_emails = extract_from_js_files(domain, content)
+        all_emails.update(js_emails)
+        
+        print(f"\n[PAGE {page_num}] Emails found this page: {len(html_emails) + len(js_emails)}")
+        print(f"[PAGE {page_num}] Running total: {len(all_emails)}\n")
+    
+    # Final filtering and reporting
+    print(f"\n{'='*70}")
+    print(f"║ FINAL RESULTS")
+    print(f"{'='*70}\n")
+    
+    real_emails = []
+    fake_emails = []
+    
+    for email in sorted(all_emails):
+        if is_fake_email(email):
+            fake_emails.append(email)
+        else:
+            real_emails.append(email)
+    
+    print(f"\n✓ REAL EMAILS ({len(real_emails)}):")
+    for email in real_emails:
+        print(f"  • {email}")
+    
+    if fake_emails:
+        print(f"\n✗ FILTERED EMAILS ({len(fake_emails)}):")
+        for email in fake_emails[:10]:  # Show first 10
+            print(f"  • {email}")
+        if len(fake_emails) > 10:
+            print(f"  ... and {len(fake_emails) - 10} more")
+    
+    print(f"\n{'='*70}")
+    print(f"[FINAL] Total found: {len(all_emails)}")
+    print(f"[FINAL] Real emails: {len(real_emails)}")
+    print(f"[FINAL] Fake emails filtered: {len(fake_emails)}")
+    print(f"{'='*70}\n")
+    
+    return real_emails
