@@ -394,12 +394,39 @@ def extract_from_js_files(domain, html):
         
         js_list = sorted(list(js_urls), key=priority_score, reverse=True)
         
-        # ===== STEP 4: SCAN ALL FILES =====
-        print(f"\n[JS] Step 4: Scanning all JavaScript files...")
+        # ===== STEP 4: SCAN ALL FILES IN PARALLEL =====
+        print(f"\n[JS] Step 4: Scanning all JavaScript files in parallel...")
         scanned = 0
         skipped = 0
         
-        for js_url in js_list:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        def fetch_and_scan(js_url):
+            try:
+                filename = js_url.split('/')[-1]
+                r = requests.get(js_url, headers=HEADERS, timeout=8, verify=False)
+                if r.status_code != 200:
+                    return []
+                if len(r.text) > 5000000:
+                    print(f"[JS-fetch] Skipping {filename} - too large")
+                    return []
+                print(f"[JS-fetch] Scanning {filename} ({len(r.text)} bytes)")
+                found = extract_emails_from_text(r.text, source=f"js-file")
+                if found:
+                    print(f"[JS-fetch] Found {len(found)}: {found}")
+                return found
+            except:
+                return []
+        
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(fetch_and_scan, url): url for url in js_list}
+            for future in as_completed(futures):
+                result = future.result()
+                all_emails.update(result)
+                scanned += 1
+        
+        for js_url in []:  # dummy to keep structure
+            pass
             try:
                 filename = js_url.split('/')[-1]
                 print(f"\n[JS-fetch] Fetching: {filename}...")
