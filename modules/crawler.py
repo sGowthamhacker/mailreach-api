@@ -388,7 +388,7 @@ def crawl(domain, log_callback=None):
         visited.add(url)
 
         HOSTING_PLATFORMS = ["vercel.app", "netlify.app", "github.io", "pages.dev"]
-        use_playwright = any(p in domain for p in HOSTING_PLATFORMS) and url == f"https://{domain}/"
+        use_playwright = any(p in domain for p in HOSTING_PLATFORMS) and (url == f"https://{domain}/" or url == f"https://{domain}")
         if use_playwright:
             content = fetch_with_playwright(url)
             if content:
