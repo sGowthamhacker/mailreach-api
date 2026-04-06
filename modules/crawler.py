@@ -387,22 +387,26 @@ def crawl(domain, log_callback=None):
             continue
         visited.add(url)
 
+        content = None
         HOSTING_PLATFORMS = ["vercel.app", "netlify.app", "github.io", "pages.dev"]
-        use_playwright = any(p in domain for p in HOSTING_PLATFORMS) and (url == f"https://{domain}/" or url == f"https://{domain}")
-        if use_playwright:
+        is_hosting = any(p in domain for p in HOSTING_PLATFORMS)
+        is_homepage = url.rstrip('/') == f"https://{domain}".rstrip('/')
+        
+        if is_hosting and is_homepage:
             content = fetch_with_playwright(url)
-            if content:
-                log(f"[ok] {url}")
-                pages_data.append({"url": url, "content": content})
+        
+        if not content:
+            r = safe_get(url, session)
+            if r:
+                content = r.text
+            else:
+                log(f"[skip] {url}")
                 continue
-        r = safe_get(url, session)
-        if not r:
-            log(f"[skip] {url}")
-            continue
+        
         log(f"[ok] {url}")
-        pages_data.append({"url": url, "content": r.text})
+        pages_data.append({"url": url, "content": content})
 
-        new_links = get_links(url, r.text, domain)
+        new_links = get_links(url, content, domain)
         for link in new_links:
             if link not in visited and link not in to_visit:
                 to_visit.insert(0, link)
