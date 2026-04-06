@@ -414,7 +414,7 @@ def extract_from_js_files(domain, html):
                 js_size = len(js_text)
                 
                 # Skip huge files (>2MB likely unimportant vendors)
-                if js_size > 2000000:
+                if js_size > 5000000:
                     print(f"[JS-fetch] ⊘ Skipped (too large: {js_size} bytes)")
                     skipped += 1
                     continue
