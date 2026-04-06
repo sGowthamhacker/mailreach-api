@@ -311,7 +311,7 @@ def crawl_batch(to_visit, domain, max_pages, log):
 
     return pages_data
 
-def crawl(domain, log_callback=None):
+def crawl(domain, log_callback=None, scan_subdomains=True):
     def log(msg):
         print(msg)
         if log_callback:
@@ -343,7 +343,11 @@ def crawl(domain, log_callback=None):
                 pages_data.append({"url": f"https://{domain}/", "content": r.text})
     else:
         # Step 1: Discover subdomains
-        subdomains = discover_subdomains(domain, session)
+        if scan_subdomains:
+            subdomains = discover_subdomains(domain, session)
+        else:
+            subdomains = []
+            log('[CRAWLER] Subdomain scan skipped - main domain only')
 
         # Step 2: Build URL list — main domain + all subdomains
         to_visit = []
@@ -384,3 +388,6 @@ def crawl(domain, log_callback=None):
 
     log(f"[CRAWLER] Done - {len(pages_data)} pages crawled")
     return pages_data
+
+
+
