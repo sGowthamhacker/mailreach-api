@@ -2,7 +2,9 @@
 import sys
 import json
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+import warnings
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 from config import EMAIL_PREFIXES
 
 sys.stdout.reconfigure(encoding="utf-8")

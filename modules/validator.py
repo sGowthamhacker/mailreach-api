@@ -10,11 +10,18 @@ BIG_PROVIDERS = [
     "protonmail.com", "icloud.com", "me.com", "mac.com"
 ]
 
+_mx_cache = {}
+
 def has_mx_record(domain):
+    if domain in _mx_cache:
+        return _mx_cache[domain]
     try:
         records = dns.resolver.resolve(domain, 'MX', lifetime=4)
-        return [str(r.exchange).rstrip('.') for r in records]
+        result = [str(r.exchange).rstrip('.') for r in records]
+        _mx_cache[domain] = result
+        return result
     except:
+        _mx_cache[domain] = []
         return []
 
 def smtp_handshake(email, mx_host):
@@ -69,7 +76,7 @@ def validate_emails(emails, website_domain=None):
     results = []
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(check_single_email, email): email for email in emails}
-        for future in as_completed(futures, timeout=30):
+        for future in as_completed(futures, timeout=120):
             try:
                 results.append(future.result())
             except Exception as e:
@@ -83,4 +90,5 @@ def validate_emails(emails, website_domain=None):
     valid = [r for r in results if r["valid"]]
     print(f"  [done] {len(valid)}/{len(emails)} valid")
     return results
+
 

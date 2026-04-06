@@ -1,7 +1,9 @@
 ﻿import requests
 import random
 import time
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+import warnings
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 from urllib.parse import urljoin, urlparse
 import urllib3
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -406,6 +408,7 @@ def crawl(domain, log_callback=None, scan_subdomains=True):
 
     log(f"[CRAWLER] Done - {len(pages_data)} pages crawled")
     return pages_data
+
 
 
 
