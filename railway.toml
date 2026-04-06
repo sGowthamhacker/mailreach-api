@@ -1,5 +1,8 @@
-[build]
-buildCommand = ""
+﻿[build]
+builder = "nixpacks"
+
+[build.env]
+PLAYWRIGHT_BROWSERS_PATH = "/app/.playwright"
 
 [deploy]
-startCommand = "uvicorn main:app --host 0.0.0.0 --port 8000"
+startCommand = "python main.py"
