@@ -18,9 +18,13 @@ from modules.filter_engine import filter_best
 from modules.bounty_detector import detect_bounty
 from modules.sender import send_all
 
+print("\n[MAIN] Loading MailReach API...")
+
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 executor = ThreadPoolExecutor()
+
+print("[MAIN] API initialized\n")
 
 class ScanRequest(BaseModel):
     domain: str
@@ -51,8 +55,15 @@ async def scan(req: ScanRequest):
         valid = validate_emails(filtered, domain)
         best = filter_best(valid)
         bounty = detect_bounty(pages)
-        return {"emails": [{"email": e["email"],"score": e["score"],"domain": e["domain"],"mx_ok": e["mx_ok"],"smtp_ok": e.get("smtp_ok", False)} for e in best], "bounty": bounty, "logs": logs}
+        return {
+            "emails": [{"email": e["email"], "score": e["score"], "domain": e["domain"], "mx_ok": e["mx_ok"], "smtp_ok": e.get("smtp_ok", False)} for e in best],
+            "bounty": bounty,
+            "logs": logs
+        }
     except Exception as e:
+        print(f"[SCAN] Error: {e}")
+        import traceback
+        traceback.print_exc()
         return {"emails": [], "bounty": None, "logs": [{"msg": str(e), "type": "err"}]}
 
 @app.post("/scan-stream")
@@ -65,46 +76,82 @@ def scan_stream(req: ScanRequest):
 
     def run_scan():
         try:
+            print(f"\n{'='*70}")
+            print(f"[SCAN-STREAM] Starting scan for {domain}")
+            print(f"[SCAN-STREAM] Crawler version: 2.0 Production")
+            print(f"{'='*70}\n")
+            
             send(f"🔍 Scanning {domain}...", "info")
             send(f"🌐 Building URL queue...", "info")
 
             def crawl_log(msg):
-                print(f"[CRAWL_LOG] {msg}")
+                print(f"[CRAWL] {msg}")
                 if "[ok]" in msg:
                     send(f"✅ Crawled: {msg.replace('[ok]','').strip()}", "ok")
                 elif "[skip]" in msg:
                     send(f"⏭ Skipped: {msg.replace('[skip]','').strip()}", "info")
                 elif "[done]" in msg:
                     send(f"🏁 {msg.replace('[done]','').strip()}", "ok")
-                elif "[crawl]" in msg:
-                    send(f"🕷️ {msg.replace('[crawl]','').strip()}", "info")
+                elif "[CRAWLER]" in msg:
+                    send(f"🕷️ {msg}", "info")
                 else:
                     send(msg, "info")
 
-            print(f"[RUN_SCAN] Starting crawl for {domain}")
+            print(f"[SCAN-STREAM] Calling crawl({domain})...")
             pages = crawl(domain, log_callback=crawl_log)
-            print(f"[RUN_SCAN] Crawl returned {len(pages)} pages")
+            
+            print(f"[SCAN-STREAM] Crawl returned {len(pages)} pages")
             for i, page in enumerate(pages):
-                print(f"[RUN_SCAN] Page {i}: URL={page['url']}, content_length={len(page['content'])}")
+                print(f"[SCAN-STREAM]   Page {i}: {page['url']} ({len(page['content'])} bytes)")
+            
             send(f"📄 Crawled {len(pages)} pages — extracting emails...", "info")
-            print(f"[RUN_SCAN] Calling extract_all with {len(pages)} pages")
+            
+            print(f"[SCAN-STREAM] Calling extract_all({domain}, {len(pages)} pages)...")
             emails = extract_all(domain, pages)
-            print(f"[RUN_SCAN] extract_all returned {len(emails)} emails: {emails[:3] if emails else []}")
+            
+            print(f"[SCAN-STREAM] extract_all returned {len(emails)} emails")
+            if emails:
+                print(f"[SCAN-STREAM]   Emails: {emails[:5]}")
+            
             send(f"📧 Found {len(emails)} raw emails", "info")
+            
             clean = clean_emails(emails)
-            filtered = clean
-            send(f"🧹 Cleaned to {len(filtered)} emails", "info")
-            valid = validate_emails(filtered, domain)
+            send(f"🧹 Cleaned to {len(clean)} emails", "info")
+            
+            valid = validate_emails(clean, domain)
             send(f"✔️ Validated {len(valid)} emails", "ok")
+            
             best = filter_best(valid)
             send(f"⭐ Selected {len(best)} best emails", "ok")
+            
             bounty = detect_bounty(pages)
             if bounty["has_program"]:
                 send(f"🎯 Bug bounty detected: {bounty['type']}", "ok")
             else:
                 send(f"ℹ️ No bounty program found", "info")
-            log_queue.put({"type": "done", "emails": [{"email": e["email"],"score": e["score"],"domain": e["domain"],"mx_ok": e["mx_ok"],"smtp_ok": e.get("smtp_ok", False)} for e in best], "bounty": bounty})
+            
+            print(f"[SCAN-STREAM] Sending final result...")
+            log_queue.put({
+                "type": "done",
+                "emails": [
+                    {
+                        "email": e["email"],
+                        "score": e["score"],
+                        "domain": e["domain"],
+                        "mx_ok": e["mx_ok"],
+                        "smtp_ok": e.get("smtp_ok", False)
+                    } for e in best
+                ],
+                "bounty": bounty
+            })
+            
+            print(f"[SCAN-STREAM] Scan complete!")
+            print(f"{'='*70}\n")
+        
         except Exception as e:
+            print(f"\n[SCAN-STREAM] ERROR: {str(e)}")
+            import traceback
+            traceback.print_exc()
             send(f"❌ Error: {str(e)}", "err")
             log_queue.put({"type": "done", "emails": [], "bounty": None})
 
@@ -128,7 +175,10 @@ async def send_emails(req: SendRequest):
     try:
         loop = asyncio.get_event_loop()
         results = await loop.run_in_executor(executor, lambda: send_all(req.targets, req.subject, req.body))
-        return {"results": results, "logs": [{"msg": f"{r['to']} -> {r['status']} via {r['service']}", "type": "ok" if r["status"] == "sent" else "err"} for r in results]}
+        return {
+            "results": results,
+            "logs": [{"msg": f"{r['to']} -> {r['status']} via {r['service']}", "type": "ok" if r["status"] == "sent" else "err"} for r in results]
+        }
     except Exception as e:
         return {"results": [], "logs": [{"msg": str(e), "type": "err"}]}
 
@@ -145,7 +195,13 @@ async def check_mx(req: MxCheckRequest):
         mx_ok = len(mx_hosts) > 0
     except Exception as e:
         return {"email": email, "mx_ok": False, "smtp_ok": False, "error": f"MX lookup failed: {str(e)}"}
-    return {"email": email, "mx_ok": mx_ok, "smtp_ok": mx_ok, "domain": domain, "mx_hosts": [str(m.exchange).rstrip(".") for m in mx_hosts[:3]]}
+    return {
+        "email": email,
+        "mx_ok": mx_ok,
+        "smtp_ok": mx_ok,
+        "domain": domain,
+        "mx_hosts": [str(m.exchange).rstrip(".") for m in mx_hosts[:3]]
+    }
 
 @app.get("/debug-page")
 def debug_page():
@@ -159,7 +215,6 @@ def debug_page():
             return {"status": "failed", "error": "Playwright returned None"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
-    
 
 @app.get("/test-playwright")
 def test_playwright():
@@ -176,4 +231,7 @@ def test_playwright():
 @app.get("/debug")
 def debug():
     import os
-    return {"GMAIL_USER": os.environ.get("GMAIL_USER", "NOT SET"), "GMAIL_PASS": "SET" if os.environ.get("GMAIL_APP_PASSWORD") else "NOT SET"}
+    return {
+        "GMAIL_USER": os.environ.get("GMAIL_USER", "NOT SET"),
+        "GMAIL_PASS": "SET" if os.environ.get("GMAIL_APP_PASSWORD") else "NOT SET"
+    }
