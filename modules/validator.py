@@ -62,12 +62,11 @@ def check_single_email(email):
         return {"email": email, "domain": email_domain,
                 "mx_ok": False, "smtp_ok": False,
                 "smtp_status": "no_mx", "valid": False}
-    smtp_status = smtp_handshake(email, mx_hosts[0])
-    smtp_ok = smtp_status == 'verified'
-    print(f"  [smtp] {email} -> {smtp_status}")
+    # Skip SMTP - too slow and blocked by most servers
+    print(f"  [mx ok] {email}")
     return {"email": email, "domain": email_domain,
-            "mx_ok": True, "smtp_ok": smtp_ok,
-            "smtp_status": smtp_status, "valid": True}
+            "mx_ok": True, "smtp_ok": False,
+            "smtp_status": "skipped", "valid": True}
 
 def validate_emails(emails, website_domain=None):
     if not emails:
@@ -90,5 +89,7 @@ def validate_emails(emails, website_domain=None):
     valid = [r for r in results if r["valid"]]
     print(f"  [done] {len(valid)}/{len(emails)} valid")
     return results
+
+
 
 
