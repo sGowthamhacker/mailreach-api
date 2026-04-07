@@ -102,7 +102,7 @@ def extract_from_html(content, target_root):
                 m = re.search(EMAIL_REGEX, href)
                 if m:
                     email = m.group(0).lower()
-                    if not is_fake(email):
+                    if not is_fake(email) and is_target_email(email, target_root):
                         mailto_emails.add(email)
         for e in extract_from_text(soup.get_text(" ")):
             if is_target_email(e, target_root):
@@ -230,6 +230,58 @@ def fetch_publicwww(domain, root):
         print(f"[hunter] Error: {ex}")
     return emails
 
+def fetch_emailformat(root):
+    emails = set()
+    try:
+        r = requests.get(f"https://www.email-format.com/d/{root}/", headers=HEADERS, timeout=8)
+        if r.status_code == 200:
+            for e in re.findall(r"[a-zA-Z0-9._%+\-]+@" + re.escape(root), r.text):
+                if not is_fake(e.lower()):
+                    emails.add(e.lower())
+        print(f"[emailformat] {len(emails)} emails")
+    except Exception as ex:
+        print(f"[emailformat] Error: {ex}")
+    return emails
+
+def fetch_github_org(root):
+    emails = set()
+    try:
+        org = root.split(".")[0]
+        r = requests.get(f"https://api.github.com/orgs/{org}/members?per_page=30", headers=HEADERS, timeout=8)
+        if r.status_code == 200:
+            for member in r.json():
+                login = member.get("login","")
+                if login:
+                    pr = requests.get(f"https://api.github.com/users/{login}", headers=HEADERS, timeout=5)
+                    if pr.status_code == 200:
+                        email = pr.json().get("email","")
+                        if email and is_target_email(email, root):
+                            emails.add(email.lower())
+        print(f"[github] {len(emails)} emails")
+    except Exception as ex:
+        print(f"[github] Error: {ex}")
+    return emails
+
+def fetch_securitytxt(domain, root):
+    emails = set()
+    for url in [f"https://{domain}/.well-known/security.txt", f"https://{domain}/security.txt",
+                f"https://security.{root}/.well-known/security.txt", f"https://security.{root}/security.txt"]:
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=6, verify=False)
+            if r.status_code == 200:
+                for e in extract_from_text(r.text):
+                    if is_target_email(e, root):
+                        emails.add(e)
+                # Also grab mailto: links
+                for m in re.findall(r"mailto:([^\s>]+)", r.text, re.I):
+                    e = m.strip().lower()
+                    if is_target_email(e, root) and not is_fake(e):
+                        emails.add(e)
+        except:
+            pass
+    print(f"[security.txt] {len(emails)} emails")
+    return emails
+
 def fetch_public_sources(domain):
     emails = set()
     root = get_root(domain)
@@ -256,6 +308,9 @@ def fetch_public_sources(domain):
     emails.update(fetch_wayback(domain, root))
     emails.update(fetch_ssl_certs(domain, root))
     emails.update(fetch_publicwww(domain, root))
+    emails.update(fetch_emailformat(root))
+    emails.update(fetch_github_org(root))
+    emails.update(fetch_securitytxt(domain, root))
     return emails
 
 def extract_all(domain, pages_data):
