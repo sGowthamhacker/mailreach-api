@@ -124,13 +124,27 @@ def extract_from_html(content, target_root):
                 for e in extract_from_text(txt):
                     if is_target_email(e, target_root):
                         page_emails.add(e)
+        # All HTML attributes that might contain emails
         for tag in soup.find_all(True):
-            for attr in ["data-email","data-contact","data-mailto","content"]:
+            for attr in ["data-email","data-contact","data-mailto",
+                         "content","href","value","placeholder",
+                         "data-value","data-address","title","alt"]:
                 val = tag.get(attr, "")
-                if val and "@" in val:
+                if val and "@" in val and "mailto:" not in val.lower():
                     for e in extract_from_text(val):
                         if is_target_email(e, target_root):
                             page_emails.add(e)
+        # Comments in HTML source
+        from bs4 import Comment
+        for comment in soup.find_all(string=lambda t: isinstance(t, Comment)):
+            if "@" in comment:
+                for e in extract_from_text(comment):
+                    if is_target_email(e, target_root):
+                        page_emails.add(e)
+        # Raw HTML source scan - catches obfuscated emails in HTML comments/attributes
+        for e in extract_from_text(content):
+            if is_target_email(e, target_root):
+                page_emails.add(e)
     except Exception as ex:
         print(f"[HTML] Error: {ex}")
     return mailto_emails, page_emails
@@ -217,7 +231,7 @@ def extract_all(domain, pages_data):
         mailto_found, page_found = extract_from_html(content, root)
         found.update(mailto_found)
         found.update(page_found)
-        if any(k in url.lower() for k in JS_PAGES):
+        if True:  # scan JS on all pages
             js = fetch_js_emails(domain, content, root)
             found.update(js)
         if found:
@@ -238,4 +252,6 @@ def extract_all(domain, pages_data):
 
 # Alias for backward compatibility with main.py
 extract_emails_from_text = extract_from_text
+
+
 
