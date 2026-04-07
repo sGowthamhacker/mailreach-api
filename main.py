@@ -120,6 +120,8 @@ def scan_stream(req: ScanRequest):
     threading.Thread(target=run_scan, daemon=True).start()
 
     def event_stream():
+        # Send immediate heartbeat so Railway proxy does not timeout
+        yield f"data: {json.dumps({'type':'log','msg':'Connected...','level':'info'})}\n\n"
         while True:
             try:
                 item = log_queue.get(timeout=300)
