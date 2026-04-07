@@ -367,9 +367,9 @@ def discover_subdomains(domain, session):
             return None
 
     print(f"[SUBDOMAIN] Checking {len(COMMON_SUBDOMAINS)} subdomains for {root}...")
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=25) as executor:
         futures = {executor.submit(check_subdomain, sub): sub for sub in COMMON_SUBDOMAINS}
-        for future in as_completed(futures, timeout=25):
+        for future in as_completed(futures, timeout=60):
             try:
                 result = future.result()
                 if result:
@@ -439,7 +439,7 @@ def crawl_batch(to_visit, domain, max_pages, log):
 
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(fetch_url_parallel, url): url for url in batch}
-            for future in as_completed(futures, timeout=15):
+            for future in as_completed(futures, timeout=25):
                 try:
                     url, content = future.result()
                     if content:
@@ -542,6 +542,8 @@ def crawl(domain, log_callback=None, scan_subdomains=True):
 
     log(f"[CRAWLER] Done - {len(pages_data)} pages crawled")
     return pages_data
+
+
 
 
 
