@@ -1,4 +1,4 @@
-import re
+﻿import re
 from config import BLACKLIST
 
 def is_valid_format(email):
@@ -12,6 +12,11 @@ def is_example_email(email):
     fake_domains = ["example.com", "example.org", "test.com", "fake.com"]
     domain = email.split("@")[1].lower()
     return domain in fake_domains
+
+def is_image_email(email):
+    domain = email.split("@")[1].lower()
+    fake_tlds = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".bmp"]
+    return any(domain.endswith(t) for t in fake_tlds)
 
 def is_junk(email):
     prefix = email.split("@")[0].lower()
@@ -48,14 +53,14 @@ def get_root_domain(domain):
     # Remove www
     domain = domain.replace("www.", "")
     parts = domain.split(".")
-    # Handle subdomains — get last 2 parts
+    # Handle subdomains â€” get last 2 parts
     if len(parts) > 2:
         return ".".join(parts[-2:])
     return domain
 
 def filter_by_domain(emails, domain):
     root = get_root_domain(domain)
-    # Get base name without TLD — e.g. "vercel" from "vercel.app"
+    # Get base name without TLD â€” e.g. "vercel" from "vercel.app"
     base = root.split(".")[0]
     result = []
     for email in emails:
@@ -66,7 +71,7 @@ def filter_by_domain(emails, domain):
         if email_root == root:
             result.append(email)
             continue
-        # Match base name — catches vercel.app vs vercel.com
+        # Match base name â€” catches vercel.app vs vercel.com
         if email_base == base:
             result.append(email)
             continue

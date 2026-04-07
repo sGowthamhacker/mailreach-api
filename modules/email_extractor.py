@@ -108,8 +108,10 @@ def extract_from_html(content, domain):
                 emails.update(extract_emails_from_text(script.string))
     except Exception as e:
         print(f"[HTML] Error: {e}")
-    # Return ALL emails found - no domain filter
-    return emails
+    # Keep only emails matching target domain
+    target_parts = domain.split(".")
+    root = ".".join(target_parts[-2:]) if len(target_parts) > 1 else domain
+    return {e for e in emails if root in e.split("@")[1]}
 
 def fetch_js_emails(domain, html):
     emails = set()
@@ -143,8 +145,10 @@ def fetch_js_emails(domain, html):
                     pass
     except Exception as e:
         print(f"[JS] Error: {e}")
-    # Return ALL emails found in JS
-    return emails
+    # Keep only emails matching target domain
+    target_parts = domain.split(".")
+    root = ".".join(target_parts[-2:]) if len(target_parts) > 1 else domain
+    return {e for e in emails if root in e.split("@")[1]}
 
 def fetch_public_sources(domain):
     emails = set()
@@ -203,4 +207,5 @@ def extract_all(domain, pages_data):
     real = [e for e in all_emails if not is_fake_email(e)]
     print(f"[EXTRACT] Done - {len(real)} real emails found")
     return real
+
 
