@@ -235,3 +235,7 @@ def extract_all(domain, pages_data):
     result = [e for e in all_emails if not is_fake(e)]
     print(f"[EXTRACT] Done - {len(result)} emails found")
     return result
+
+# Alias for backward compatibility with main.py
+extract_emails_from_text = extract_from_text
+
