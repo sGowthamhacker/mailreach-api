@@ -183,8 +183,8 @@ def safe_get(url, session, timeout=5):
 def fetch_url_parallel(url):
     try:
         s = get_session()
-        r = s.get(url, timeout=5, verify=False)
-        if r.status_code == 200 and len(r.text) > 200:
+        r = s.get(url, timeout=8, verify=False, allow_redirects=True)
+        if r.status_code in [200, 201, 203] and len(r.text) > 100:
             return url, r.text
         return url, None
     except:
@@ -408,6 +408,7 @@ def crawl(domain, log_callback=None, scan_subdomains=True):
 
     log(f"[CRAWLER] Done - {len(pages_data)} pages crawled")
     return pages_data
+
 
 
 
