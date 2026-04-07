@@ -2,7 +2,7 @@
 
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "")
-MAX_PAGES_PER_DOMAIN = 400
+MAX_PAGES_PER_DOMAIN = 250
 CRAWL_DELAY = 0
 REQUEST_TIMEOUT = 10
 DELAY_BETWEEN_EMAILS = 2
@@ -80,3 +80,4 @@ BLACKLIST = [
     "daemon", "noreply", "no-reply", "notifications",
     "alerts", "system", "robot", "auto",
 ]
+
