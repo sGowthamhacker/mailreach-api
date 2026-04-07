@@ -108,10 +108,8 @@ def extract_from_html(content, domain):
                 emails.update(extract_emails_from_text(script.string))
     except Exception as e:
         print(f"[HTML] Error: {e}")
-    # filter to only keep emails matching the target domain
-    target_parts = domain.split(".")
-    root = ".".join(target_parts[-2:]) if len(target_parts) > 1 else domain
-    return {e for e in emails if root in e.split("@")[1]}
+    # Return ALL emails found - no domain filter
+    return emails
 
 def fetch_js_emails(domain, html):
     emails = set()
@@ -145,9 +143,8 @@ def fetch_js_emails(domain, html):
                     pass
     except Exception as e:
         print(f"[JS] Error: {e}")
-    target_parts = domain.split(".")
-    root = ".".join(target_parts[-2:]) if len(target_parts) > 1 else domain
-    return {e for e in emails if root in e.split("@")[1]}
+    # Return ALL emails found in JS
+    return emails
 
 def fetch_public_sources(domain):
     emails = set()
@@ -161,8 +158,7 @@ def fetch_public_sources(domain):
             for entry in r.json()[:50]:
                 name = entry.get("name_value","")
                 for e in extract_emails_from_text(name):
-                    if root in e.split("@")[1]:
-                        emails.add(e)
+                    emails.add(e)
         print(f"[crt.sh] {len(emails)} emails")
     except Exception as e:
         print(f"[crt.sh] Error: {e}")
@@ -172,8 +168,7 @@ def fetch_public_sources(domain):
         import whois
         w = whois.whois(root)
         for e in extract_emails_from_text(str(w)):
-            if root in e.split("@")[1]:
-                emails.add(e)
+            emails.add(e)
         print(f"[whois] {len(emails)} emails")
     except Exception as e:
         print(f"[whois] Error: {e}")
@@ -208,3 +203,4 @@ def extract_all(domain, pages_data):
     real = [e for e in all_emails if not is_fake_email(e)]
     print(f"[EXTRACT] Done - {len(real)} real emails found")
     return real
+
