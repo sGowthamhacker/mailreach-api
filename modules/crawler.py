@@ -400,7 +400,7 @@ def get_sitemap_urls(domain, session):
                     break
         except:
             pass
-    return list(urls)[:20]
+    return list(urls)[:100]
 
 def get_robots_paths(domain, session):
     paths = []
@@ -427,7 +427,7 @@ def crawl_batch(to_visit, domain, max_pages, log):
 
     while i < len(to_visit) and crawled < max_pages:
         batch = []
-        while len(batch) < 5 and i < len(to_visit):
+        while len(batch) < 10 and i < len(to_visit):
             url = to_visit[i]
             i += 1
             if url not in visited:
@@ -437,9 +437,9 @@ def crawl_batch(to_visit, domain, max_pages, log):
         if not batch:
             break
 
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor(max_workers=15) as executor:
             futures = {executor.submit(fetch_url_parallel, url): url for url in batch}
-            for future in as_completed(futures, timeout=25):
+            for future in as_completed(futures, timeout=60):
                 try:
                     url, content = future.result()
                     if content:
@@ -542,6 +542,8 @@ def crawl(domain, log_callback=None, scan_subdomains=True):
 
     log(f"[CRAWLER] Done - {len(pages_data)} pages crawled")
     return pages_data
+
+
 
 
 
