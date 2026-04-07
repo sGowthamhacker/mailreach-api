@@ -1,44 +1,28 @@
 ﻿from config import PRIORITY, BLACKLIST
 
 JUNK_PATTERNS = [
-    "bounce", "automated", "mailer-daemon",
-    "daemon", "unsubscribe", "donotreply"
+    "bounce", "automated", "mailer-daemon", "daemon",
+    "unsubscribe", "donotreply", "noreply", "no-reply",
+    "notifications", "alerts", "system", "robot",
 ]
 
-def is_junk_pattern(email):
+def is_junk(email):
     prefix = email.split("@")[0].lower()
     return any(j in prefix for j in JUNK_PATTERNS)
 
-def get_priority_score(email):
-    prefix = email.split("@")[0].lower()
-    if prefix in PRIORITY:
-        return len(PRIORITY) - PRIORITY.index(prefix)
-    return 1  # still keep it, just low score
-
-def filter_best(valid_emails):
+def filter_best(validated_emails):
     results = []
-
-    for item in valid_emails:
+    for item in validated_emails:
         email = item["email"]
 
-        # Only need MX to be valid â€” smtp_ok is bonus
-        # if not item.get("mx_ok"):
-            pass  # show all emails
-            # continue
-
         # Skip junk
-        if is_junk_pattern(email):
-            print(f"  [skip] {email} -> junk")
-            # continue
+        if is_junk(email):
+            print(f"  [junk] {email}")
+            continue
 
-        score = get_priority_score(email)
+        results.append(item)
 
-        if item.get("smtp_ok"):
-            score += 3
-
-        results.append({**item, "score": score})
-
-    results.sort(key=lambda x: x["score"], reverse=True)
-    print(f"  [done] {len(results)} best emails selected")
+    # Sort by score
+    results.sort(key=lambda x: x.get("score", 0), reverse=True)
+    print(f"  [done] {len(results)} emails after junk filter")
     return results
-

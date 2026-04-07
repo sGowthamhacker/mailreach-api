@@ -179,3 +179,4 @@ def test_crawl():
         except Exception as e:
             results[url] = {"error": str(e), "type": type(e).__name__}
     return results
+
