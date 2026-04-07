@@ -223,7 +223,7 @@ def discover_subdomains(domain, session):
         url = f"https://{sub}.{root}/"
         try:
             s = get_session()
-            r = s.get(url, timeout=4, verify=False, allow_redirects=False)
+            r = s.get(url, timeout=4, verify=False, allow_redirects=True)
             if r.status_code in [200, 301, 302, 403]:
                 parsed = urlparse(r.url)
                 if root in parsed.netloc:
@@ -408,6 +408,7 @@ def crawl(domain, log_callback=None, scan_subdomains=True):
 
     log(f"[CRAWLER] Done - {len(pages_data)} pages crawled")
     return pages_data
+
 
 
 
