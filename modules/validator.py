@@ -89,9 +89,9 @@ def check_single_email(email):
                 "status": "no_mx", "score": 0, "valid": False
             }
 
-        # SMTP check
-        smtp_ok = smtp_check(email, mx_hosts[0])
-        status = "smtp_verified" if smtp_ok else "mx_only"
+        # Skip SMTP - too slow and blocked by Railway
+        smtp_ok = False
+        status = "mx_only"
         score = get_score(email, mx_ok, smtp_ok)
 
         print(f"  [{status}] {email} score={score}")
