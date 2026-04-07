@@ -104,51 +104,118 @@ COMMON_SUBDOMAINS = [
 ]
 
 SEED_PATHS = [
+    # Core pages
     "/", "/contact", "/about", "/team", "/security",
-    "/support", "/help", "/docs", "/blog",
-    "/contact-us", "/about-us",
-    "/security.txt", "/.well-known/security.txt",
-    "/humans.txt", "/robots.txt",
-    "/", "/contact", "/contact-us", "/contactus", "/contact_us",
-    "/about", "/about-us", "/aboutus", "/about_us",
-    "/team", "/our-team", "/ourteam", "/people", "/staff",
-    "/company", "/corporate", "/organization", "/organisation",
-    "/security", "/security.txt", "/.well-known/security.txt",
+    "/support", "/help", "/contact-us", "/about-us",
     "/robots.txt", "/humans.txt", "/sitemap.xml",
-    "/support", "/help", "/faq", "/faqs",
+    "/security.txt", "/.well-known/security.txt",
+    "/.well-known/pgp-key.txt",
+    # Contact variations
+    "/contact_us", "/contactus", "/contact-form",
+    "/get-in-touch", "/getintouch", "/reach-us", "/reach",
+    "/connect", "/hello", "/say-hello", "/talk-to-us",
+    "/message", "/email", "/email-us", "/mail",
+    "/inquiry", "/inquiries", "/enquiry", "/enquiries",
+    "/feedback", "/write-to-us", "/get-help", "/ask",
+    "/request", "/touch", "/ping",
+    # About variations
+    "/about_us", "/aboutus", "/our-story", "/ourstory",
+    "/who-we-are", "/whoweare", "/overview", "/mission",
+    "/vision", "/values", "/culture", "/story",
+    # Team/People
+    "/our-team", "/ourteam", "/people", "/staff",
+    "/crew", "/members", "/leadership", "/leaders",
+    "/management", "/executives", "/exec",
+    "/founders", "/founder", "/board", "/advisors",
+    "/directors", "/officers", "/president",
+    "/ceo", "/cto", "/cfo", "/ciso", "/coo",
+    # Company
+    "/company", "/corporate", "/organization",
+    "/organisation", "/hq", "/headquarters",
+    "/offices", "/locations", "/office", "/global",
+    # Security/Disclosure
+    "/security-policy", "/security-team",
+    "/responsible-disclosure", "/vulnerability-disclosure",
+    "/coordinated-disclosure", "/disclosure",
+    "/bug-bounty", "/bugbounty", "/bug_bounty",
+    "/vdp", "/bbp", "/cvd", "/psirt", "/csirt",
+    "/cert", "/hackerone", "/bugcrowd", "/intigriti",
+    "/hall-of-fame", "/halloffame", "/hof",
+    "/pentest", "/penetration-testing",
+    "/report-vulnerability", "/report-a-bug",
+    "/security/contact", "/security/report",
+    "/security/disclosure", "/security/vulnerabilities",
+    "/security/advisories", "/security/pgp",
+    "/trust", "/trust-center", "/trustcenter",
+    "/safety", "/abuse", "/fraud", "/risk",
+    "/phishing", "/spam", "/report",
+    "/pgp", "/pgp-key", "/gpg", "/keybase", "/keys",
+    # Legal/Privacy
+    "/legal", "/privacy", "/privacy-policy",
+    "/privacypolicy", "/terms", "/terms-of-service",
+    "/termsofservice", "/tos", "/eula", "/dmca",
+    "/impressum", "/imprint", "/disclaimer",
+    "/cookie-policy", "/cookies", "/data-protection",
+    "/compliance", "/gdpr", "/dpa", "/ccpa",
+    "/subprocessors", "/data-processing",
+    # Press/Media
     "/press", "/media", "/newsroom", "/news",
-    "/legal", "/privacy", "/terms",
-    "/careers", "/jobs", "/blog",
-    "/reach", "/reach-us", "/get-in-touch", "/getintouch",
-    "/talk-to-us", "/say-hello", "/hello", "/connect",
-    "/enquiry", "/enquiries", "/inquiry", "/inquiries",
-    "/email", "/email-us", "/mail", "/message", "/feedback",
-    "/our-story", "/ourstory", "/who-we-are", "/whoweare",
-    "/mission", "/vision", "/values", "/overview",
-    "/leadership", "/leaders", "/management",
-    "/founders", "/executives", "/board", "/advisors",
-    "/security-policy", "/responsible-disclosure",
-    "/vulnerability-disclosure", "/bug-bounty", "/bugbounty",
-    "/vdp", "/bbp", "/hackerone", "/bugcrowd",
-    "/hall-of-fame", "/halloffame",
+    "/press-kit", "/presskit", "/press-room",
+    "/press-releases", "/media-kit", "/media-room",
+    "/journalists", "/reporters", "/pr",
+    "/communications", "/brand",
+    # Careers/Jobs
+    "/careers", "/jobs", "/hiring", "/join",
+    "/join-us", "/work-with-us", "/work-for-us",
+    "/opportunities", "/openings", "/positions",
+    "/recruiting", "/recruitment", "/talent",
+    "/hr", "/human-resources", "/people-team",
+    "/internship", "/intern", "/graduate", "/apply",
+    # Support/Help
     "/helpdesk", "/help-center", "/helpcenter",
-    "/customer-service", "/customerservice",
+    "/knowledge-base", "/knowledgebase",
+    "/faq", "/faqs", "/documentation",
     "/customer-support", "/customersupport",
-    "/knowledge-base", "/knowledgebase", "/docs",
-    "/terms-of-service", "/termsofservice", "/tos",
-    "/privacy-policy", "/privacypolicy",
-    "/compliance", "/gdpr", "/dmca",
-    "/hiring", "/join", "/press-kit", "/presskit",
-    "/investors", "/investor-relations",
-    "/partners", "/partnerships",
-    "/api", "/developer", "/developers",
-    "/imprint", "/impressum",
-    "/trust", "/trust-center",
-    "/offices", "/locations", "/headquarters",
-    "/newsletter", "/subscribe",
-    "/sales", "/marketing", "/billing",
-    "/events", "/webinars", "/updates", "/changelog",
-    "/community", "/forum",
+    "/customer-service", "/customerservice",
+    "/customer-care", "/customercare",
+    "/technical-support", "/tickets", "/issues",
+    # Sales/Business
+    "/sales", "/business", "/enterprise",
+    "/contact/sales", "/partnerships", "/partners",
+    "/partner", "/affiliates", "/affiliate",
+    "/resellers", "/reseller", "/wholesale",
+    "/vendors", "/vendor", "/suppliers",
+    # Finance/Billing
+    "/billing", "/payments", "/invoice",
+    "/accounting", "/finance", "/subscriptions",
+    # Investors
+    "/investors", "/investor-relations", "/ir",
+    "/investor", "/shareholders", "/governance",
+    # Developer/API
+    "/developer", "/developers", "/dev",
+    "/api", "/api-support", "/developer-support",
+    "/platform", "/engineering", "/tech",
+    "/open-source", "/opensource",
+    # Community
+    "/community", "/forum", "/forums",
+    "/newsletter", "/subscribe", "/updates",
+    "/events", "/webinars", "/social",
+    # Marketing
+    "/marketing", "/advertising", "/ads",
+    "/sponsorship", "/design", "/creative",
+    # CSR/Other
+    "/csr", "/sustainability", "/foundation",
+    "/charity", "/giving", "/volunteer",
+    "/accessibility", "/diversity",
+    # Regional
+    "/en/contact", "/en/about", "/en/security",
+    "/us/contact", "/uk/contact", "/eu/contact",
+    # Extra
+    "/status", "/feedback", "/ideas", "/demo",
+    "/onboarding", "/getting-started",
+    "/abuse-report", "/report-abuse",
+    "/data-request", "/data-deletion",
+    "/warranty", "/returns", "/refunds",
 ]
 
 PRIORITY_KEYWORDS = [
@@ -173,8 +240,18 @@ def safe_get(url, session, timeout=5):
     except:
         return None
 
+SKIP_PATTERNS = [
+    "/templates/", "/template/", "/blog/", "/changelog/",
+    "/docs/", "/pricing", "/workflows", "/startups",
+    "/solutions/", "/new/", "/try-", "/enterprise",
+]
+
 def fetch_url_parallel(url):
     try:
+        # Skip pages unlikely to have emails
+        url_lower = url.lower()
+        if any(p in url_lower for p in SKIP_PATTERNS):
+            return url, None
         s = get_session()
         r = s.get(url, timeout=8, verify=False, allow_redirects=True)
         if r.status_code in [200, 201, 203] and len(r.text) > 100:
@@ -401,6 +478,9 @@ def crawl(domain, log_callback=None, scan_subdomains=True):
 
     log(f"[CRAWLER] Done - {len(pages_data)} pages crawled")
     return pages_data
+
+
+
 
 
 
