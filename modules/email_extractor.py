@@ -171,7 +171,7 @@ def fetch_js_emails(domain, html, target_root):
             if not any(src.endswith(e) for e in [".png",".jpg",".css",".woff"]):
                 js_urls.append(src)
         with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(scan_js_file, u) for u in js_urls[:30]]
+            futures = [executor.submit(scan_js_file, u) for u in js_urls[:10]]
             for f in as_completed(futures, timeout=30):
                 try:
                     for e in f.result():
@@ -181,6 +181,53 @@ def fetch_js_emails(domain, html, target_root):
                     pass
     except Exception as ex:
         print(f"[JS] Error: {ex}")
+    return emails
+
+def fetch_wayback(domain, root):
+    emails = set()
+    try:
+        import urllib.request
+        url = f"http://web.archive.org/cdx/search/cdx?url={root}&output=text&fl=original&collapse=urlkey&limit=50"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        res = urllib.request.urlopen(req, timeout=8)
+        for line in res.read().decode().splitlines():
+            for e in extract_from_text(line):
+                if is_target_email(e, root):
+                    emails.add(e)
+        print(f"[wayback] {len(emails)} emails")
+    except Exception as ex:
+        print(f"[wayback] Error: {ex}")
+    return emails
+
+def fetch_ssl_certs(domain, root):
+    emails = set()
+    try:
+        r = requests.get(f"https://crt.sh/?q={root}&output=json", headers=HEADERS, timeout=10)
+        if r.status_code == 200:
+            for entry in r.json()[:200]:
+                for field in ["name_value", "common_name"]:
+                    val = entry.get(field, "")
+                    for e in extract_from_text(val):
+                        if is_target_email(e, root):
+                            emails.add(e)
+        print(f"[ssl] {len(emails)} emails")
+    except Exception as ex:
+        print(f"[ssl] Error: {ex}")
+    return emails
+
+def fetch_publicwww(domain, root):
+    emails = set()
+    try:
+        r = requests.get(f"https://hunter.io/try/v2/domain-search?domain={root}&limit=10", headers=HEADERS, timeout=8)
+        if r.status_code == 200:
+            data = r.json()
+            for e in data.get("emails", []):
+                val = e.get("value","")
+                if val and is_target_email(val, root):
+                    emails.add(val.lower())
+        print(f"[hunter] {len(emails)} emails")
+    except Exception as ex:
+        print(f"[hunter] Error: {ex}")
     return emails
 
 def fetch_public_sources(domain):
@@ -206,6 +253,9 @@ def fetch_public_sources(domain):
         print(f"[whois] {len(emails)} emails")
     except Exception as ex:
         print(f"[whois] Error: {ex}")
+    emails.update(fetch_wayback(domain, root))
+    emails.update(fetch_ssl_certs(domain, root))
+    emails.update(fetch_publicwww(domain, root))
     return emails
 
 def extract_all(domain, pages_data):
@@ -231,7 +281,7 @@ def extract_all(domain, pages_data):
         mailto_found, page_found = extract_from_html(content, root)
         found.update(mailto_found)
         found.update(page_found)
-        if True:  # scan JS on all pages
+        if any(k in url.lower() for k in JS_PAGES):
             js = fetch_js_emails(domain, content, root)
             found.update(js)
         if found:
@@ -240,7 +290,7 @@ def extract_all(domain, pages_data):
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(process_page, page) for page in pages_data]
-        for f in as_completed(futures, timeout=120):
+        for f in as_completed(futures, timeout=300):
             try:
                 all_emails.update(f.result())
             except:
@@ -252,6 +302,8 @@ def extract_all(domain, pages_data):
 
 # Alias for backward compatibility with main.py
 extract_emails_from_text = extract_from_text
+
+
 
 
 

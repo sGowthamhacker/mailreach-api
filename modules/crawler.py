@@ -545,6 +545,9 @@ def crawl(domain, log_callback=None, scan_subdomains=True):
                 deduped.append(url)
         to_visit = deduped
 
+        if not scan_subdomains:
+            to_visit = [u for u in to_visit if u.split("/")[2].replace("www.","") == domain]
+            log("[CRAWLER] Subdomain URLs filtered - main domain only")
         log(f"[CRAWLER] Queued {len(to_visit)} URLs across {len(unique_bases)} domains/subdomains")
 
         # Step 4: Crawl with 30 parallel workers
@@ -554,6 +557,9 @@ def crawl(domain, log_callback=None, scan_subdomains=True):
 
     log(f"[CRAWLER] Done - {len(pages_data)} pages crawled")
     return pages_data
+
+
+
 
 
 
