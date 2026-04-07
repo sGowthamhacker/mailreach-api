@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+﻿from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -164,3 +164,18 @@ async def check_mx(req: MxCheckRequest):
 def debug():
     import os
     return {"GMAIL_USER": os.environ.get("GMAIL_USER", "NOT SET"), "GMAIL_PASS": "SET" if os.environ.get("GMAIL_APP_PASSWORD") else "NOT SET"}
+
+@app.get("/test-crawl")
+def test_crawl():
+    import requests
+    results = {}
+    urls = ["https://vercel.com/", "https://vercel.com/contact"]
+    for url in urls:
+        try:
+            s = requests.Session()
+            s.headers.update({"User-Agent": "Mozilla/5.0 Chrome/120"})
+            r = s.get(url, timeout=8, verify=False, allow_redirects=True)
+            results[url] = {"status": r.status_code, "length": len(r.text)}
+        except Exception as e:
+            results[url] = {"error": str(e), "type": type(e).__name__}
+    return results
