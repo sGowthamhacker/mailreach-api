@@ -22,14 +22,14 @@ def filter_best(valid_emails):
         email = item["email"]
 
         # Only need MX to be valid â€” smtp_ok is bonus
-        if not item.get("mx_ok"):
-            print(f"  [skip] {email} -> no MX")
-            continue
+        # if not item.get("mx_ok"):
+            pass  # show all emails
+            # continue
 
         # Skip junk
         if is_junk_pattern(email):
             print(f"  [skip] {email} -> junk")
-            continue
+            # continue
 
         score = get_priority_score(email)
 
@@ -41,3 +41,4 @@ def filter_best(valid_emails):
     results.sort(key=lambda x: x["score"], reverse=True)
     print(f"  [done] {len(results)} best emails selected")
     return results
+
