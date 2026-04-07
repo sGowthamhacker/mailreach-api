@@ -282,6 +282,184 @@ def fetch_securitytxt(domain, root):
     print(f"[security.txt] {len(emails)} emails")
     return emails
 
+
+def fetch_dns_txt(domain, root):
+    emails = set()
+    try:
+        import dns.resolver
+        for record in dns.resolver.resolve(domain, 'TXT', lifetime=5):
+            txt = record.to_text()
+            for e in re.findall(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', txt):
+                if is_target_email(e.lower(), root):
+                    emails.add(e.lower())
+        print(f"[dns-txt] {len(emails)} emails")
+    except Exception as ex:
+        print(f"[dns-txt] Error: {ex}")
+    return emails
+
+def fetch_rdap(domain, root):
+    emails = set()
+    try:
+        r = requests.get(f"https://rdap.org/domain/{root}", headers=HEADERS, timeout=8)
+        if r.status_code == 200:
+            text = str(r.json())
+            for e in re.findall(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', text):
+                e = e.lower()
+                if is_target_email(e, root) and not is_fake(e):
+                    emails.add(e)
+        print(f"[rdap] {len(emails)} emails")
+    except Exception as ex:
+        print(f"[rdap] Error: {ex}")
+    return emails
+
+def fetch_bing_search(domain, root):
+    emails = set()
+    try:
+        queries = [f'"{root}" email contact', f'site:{root} "@{root}"', f'"{root}" "@{root}"']
+        for q in queries:
+            r = requests.get(
+                f"https://www.bing.com/search?q={requests.utils.quote(q)}&count=20",
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                timeout=10
+            )
+            if r.status_code == 200:
+                for e in re.findall(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', r.text):
+                    e = e.lower()
+                    if is_target_email(e, root) and not is_fake(e):
+                        emails.add(e)
+        print(f"[bing] {len(emails)} emails")
+    except Exception as ex:
+        print(f"[bing] Error: {ex}")
+    return emails
+
+def fetch_pastebin(root):
+    emails = set()
+    try:
+        r = requests.get(
+            f"https://psbdmp.ws/api/search/{root}",
+            headers=HEADERS, timeout=8
+        )
+        if r.status_code == 200:
+            data = r.json()
+            for item in data.get("data", [])[:10]:
+                pid = item.get("id","")
+                if pid:
+                    pr = requests.get(f"https://pastebin.com/raw/{pid}", headers=HEADERS, timeout=5)
+                    if pr.status_code == 200:
+                        for e in re.findall(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', pr.text):
+                            e = e.lower()
+                            if is_target_email(e, root) and not is_fake(e):
+                                emails.add(e)
+        print(f"[pastebin] {len(emails)} emails")
+    except Exception as ex:
+        print(f"[pastebin] Error: {ex}")
+    return emails
+
+def fetch_commoncrawl(root):
+    emails = set()
+    try:
+        r = requests.get(
+            f"https://index.commoncrawl.org/CC-MAIN-2024-10-index?url={root}/*&output=json&limit=20",
+            headers=HEADERS, timeout=10
+        )
+        if r.status_code == 200:
+            for line in r.text.splitlines()[:20]:
+                try:
+                    import json
+                    obj = json.loads(line)
+                    url = obj.get("url","")
+                    if url:
+                        pr = requests.get(
+                            f"https://data.commoncrawl.org/{obj.get('filename','')}",
+                            headers={**HEADERS, "Range": f"bytes={obj.get('offset',0)}-{int(obj.get('offset',0))+int(obj.get('length',5000))}"},
+                            timeout=8
+                        )
+                        for e in re.findall(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', pr.text):
+                            e = e.lower()
+                            if is_target_email(e, root) and not is_fake(e):
+                                emails.add(e)
+                except:
+                    pass
+        print(f"[commoncrawl] {len(emails)} emails")
+    except Exception as ex:
+        print(f"[commoncrawl] Error: {ex}")
+    return emails
+
+def fetch_sitemap(domain, root):
+    emails = set()
+    urls_to_check = [
+        f"https://{domain}/sitemap.xml",
+        f"https://{domain}/sitemap_index.xml",
+        f"https://{domain}/robots.txt",
+        f"https://www.{domain}/sitemap.xml",
+    ]
+    contact_urls = set()
+    try:
+        for url in urls_to_check:
+            r = requests.get(url, headers=HEADERS, timeout=6, verify=False)
+            if r.status_code == 200:
+                for e in re.findall(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', r.text):
+                    e = e.lower()
+                    if is_target_email(e, root) and not is_fake(e):
+                        emails.add(e)
+                # Find contact/about URLs in sitemap
+                for u in re.findall(r'<loc>(.*?)</loc>', r.text):
+                    if any(k in u.lower() for k in ['contact','about','team','security','support','legal','privacy']):
+                        contact_urls.add(u)
+        # Fetch those contact pages
+        for url in list(contact_urls)[:15]:
+            try:
+                r = requests.get(url, headers=HEADERS, timeout=6, verify=False)
+                if r.status_code == 200:
+                    for e in re.findall(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', r.text):
+                        e = e.lower()
+                        if is_target_email(e, root) and not is_fake(e):
+                            emails.add(e)
+            except:
+                pass
+        print(f"[sitemap] {len(emails)} emails")
+    except Exception as ex:
+        print(f"[sitemap] Error: {ex}")
+    return emails
+
+def fetch_gravatar_verify(emails_to_check, root):
+    import hashlib
+    confirmed = set()
+    try:
+        for e in list(emails_to_check)[:20]:
+            h = hashlib.md5(e.strip().lower().encode()).hexdigest()
+            r = requests.get(f"https://www.gravatar.com/avatar/{h}?d=404", headers=HEADERS, timeout=4)
+            if r.status_code == 200:
+                confirmed.add(e)
+        print(f"[gravatar] {len(confirmed)} confirmed emails")
+    except Exception as ex:
+        print(f"[gravatar] Error: {ex}")
+    return confirmed
+
+def fetch_emailrep(root):
+    emails = set()
+    try:
+        common = [f"security@{root}", f"contact@{root}", f"info@{root}",
+                  f"support@{root}", f"admin@{root}", f"hello@{root}",
+                  f"privacy@{root}", f"legal@{root}", f"abuse@{root}",
+                  f"press@{root}", f"team@{root}", f"help@{root}",
+                  f"trust@{root}", f"disclosure@{root}", f"vdp@{root}",
+                  f"bugbounty@{root}", f"bugs@{root}", f"ceo@{root}",
+                  f"founders@{root}", f"hr@{root}", f"jobs@{root}"]
+        for e in common:
+            try:
+                r = requests.get(f"https://emailrep.io/{e}", headers=HEADERS, timeout=4)
+                if r.status_code == 200:
+                    data = r.json()
+                    if data.get("reputation") in ["high","medium"] or data.get("references",0) > 0:
+                        emails.add(e)
+            except:
+                pass
+        print(f"[emailrep] {len(emails)} emails")
+    except Exception as ex:
+        print(f"[emailrep] Error: {ex}")
+    return emails
+
 def fetch_public_sources(domain):
     emails = set()
     root = get_root(domain)
@@ -311,6 +489,15 @@ def fetch_public_sources(domain):
     emails.update(fetch_emailformat(root))
     emails.update(fetch_github_org(root))
     emails.update(fetch_securitytxt(domain, root))
+    emails.update(fetch_dns_txt(domain, root))
+    emails.update(fetch_rdap(domain, root))
+    emails.update(fetch_bing_search(domain, root))
+    emails.update(fetch_pastebin(root))
+    emails.update(fetch_commoncrawl(root))
+    emails.update(fetch_sitemap(domain, root))
+    emails.update(fetch_emailrep(root))
+    # Gravatar verify all collected so far
+    emails.update(fetch_gravatar_verify(emails, root))
     return emails
 
 def extract_all(domain, pages_data):
