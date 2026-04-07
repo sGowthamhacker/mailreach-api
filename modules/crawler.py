@@ -513,12 +513,22 @@ def crawl(domain, log_callback=None, scan_subdomains=True):
                 seen_bases.add(b)
                 unique_bases.append(b)
 
-        # Only apply seed paths to main domain, not every subdomain
+        # Apply seed paths to main domain
         for path in SEED_PATHS:
             to_visit.append(f"https://{domain}{path}")
-        # For subdomains just add root URL
+        # For subdomains apply key seed paths too
+        KEY_PATHS = [
+            "/", "/contact", "/about", "/security", "/support",
+            "/help", "/team", "/press", "/legal", "/privacy",
+            "/disclosure", "/bug-bounty", "/vdp", "/trust",
+            "/abuse", "/compliance", "/careers", "/investors",
+            "/security.txt", "/.well-known/security.txt",
+            "/humans.txt", "/robots.txt",
+        ]
         for base in subdomains:
-            to_visit.append(base.rstrip("/") + "/")
+            base = base.rstrip("/")
+            for path in KEY_PATHS:
+                to_visit.append(f"{base}{path}")
 
         # Step 3: Sitemap + robots
         sitemap_urls = get_sitemap_urls(domain, session)
@@ -538,10 +548,15 @@ def crawl(domain, log_callback=None, scan_subdomains=True):
         log(f"[CRAWLER] Queued {len(to_visit)} URLs across {len(unique_bases)} domains/subdomains")
 
         # Step 4: Crawl with 30 parallel workers
-        pages_data = crawl_batch(to_visit, root, MAX_PAGES_PER_DOMAIN, log)
+        max_pages = MAX_PAGES_PER_DOMAIN * 2 if scan_subdomains else MAX_PAGES_PER_DOMAIN
+        log(f"[CRAWLER] Max pages: {max_pages} (subdomain={scan_subdomains})")
+        pages_data = crawl_batch(to_visit, root, max_pages, log)
 
     log(f"[CRAWLER] Done - {len(pages_data)} pages crawled")
     return pages_data
+
+
+
 
 
 
